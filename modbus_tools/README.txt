@@ -38,6 +38,33 @@ syntaxe :
 
 
 ------------------------ un exemple d'utilisation de ces scripts (fin de journée, peu de production) ----------------
+>read_MO.py 192.168.1.120 -u 11
+Manufacturer = APsystems
+Model = DS3
+Version = V5312
+Serial Number = 704000587038
+Modbus ID = 11
+Type Inverter = 101
+current = 1.08 A
+voltage = 239.0 V
+power = 256.0 W
+frequency = 50.0 Hz
+Power (Apparent) = 259.7 VA
+Power (Reactive) = 44.0 VAR
+Power Factor = 0.985 cos φ
+Total Energy = 1.3940000000000001 kWh
+Temperature = 34.0 °C
+Status = 4
+Is Connected = 1
+Power Max = 30.0 %
+Power Max Ena = 1
+DC1 voltage = 36.16704177856445 V
+DC2 voltage = 35.88479995727539 V
+DC1 current = 3.9195001125335693 A
+DC2 current = 3.9195001125335693 A
+DC1 power = 141.75672912597656 W
+DC2 power = 140.65048217773438 W
+
 >read_all_MO.py 192.168.1.120 -u 1,11,12
 liste des équipements scannes : 1, 11, 12
 

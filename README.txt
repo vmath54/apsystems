@@ -5,4 +5,4 @@ A noter que les passerelles ECU-R dont le numéro de série commencent par 2160x
 Ma passerelle a un numéro de série en 2162xxxxxxxx
 
 Le dossier 'modbus_tools' contient des utilitaires écrits en python, qui permettent d'interroger l'ECU en protocole modbus - sunspec ; également de modifier certains registres.
-Ces utilitaires nesont pas optimisés ; à utiliser pour tests.
+Ces utilitaires ne sont pas optimisés ; à utiliser pour tests.

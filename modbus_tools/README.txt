@@ -7,7 +7,7 @@ Ils sont à utiliser pour des tests de fonctionnement
 
 read_MO.py
 ##########
-Permet de lire tous les registres exposés par un MO DS3
+Permet de lire les principaux registres exposés par un MO DS3
 syntaxe :
   read_MO.py -h : pour de l'aide
   read_MO.py 192.168.1.120 -u 11 : interrogation de l'ECU a l'adresse IP 192.168.1.120, pour le MO d'ID modbus 11

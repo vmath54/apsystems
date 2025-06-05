@@ -5,6 +5,7 @@ read_all_MO.py
 lecture modbus de certains registres pour plusieurs micro onduleurs APSystems
 teste avec des MO DS3
 se limite aux infos les plus importantes (pour moi)
+calcule les totaux de puissance
 pas optimisé : fait une requete par registre à lire
 
 syntaxe : 
@@ -104,6 +105,8 @@ def read_one_MO(client: ModbusTcpClient, one_MO, registers):
         one_MO[k] = value
 
 def print_result(MOs, registers):
+    totaux = {"power_ac": 0, "energy_total": 0, "DC1_power": 0, "DC2_power": 0}
+
     print("", "-"*((16*(len(registers)+1)-1)))
     id = "ID"
     print(f"|{id:^15}", end='')
@@ -131,9 +134,14 @@ def print_result(MOs, registers):
                 valueS = value
             valueS += " " + unit
             print(f"|{valueS:^15}", end='')
+            
+            if k in totaux:
+                totaux[k] += value
         print("|")
-    print("", "-"*((16*(len(registers)+1)-1)))        
-    
+    print("", "-"*((16*(len(registers)+1)-1)))
+    print(f"Total AC Power : {totaux.get("power_ac"):.0f} W")
+    print(f"Total DC Power : {(totaux.get("DC1_power") + totaux.get("DC2_power")):.0f} W")
+    print(f"Total Energy   : {totaux.get("energy_total"):.3f} kWh")
     
 def getRegisters(client: ModbusTcpClient):
 # key, data_type, length, factor, comment, unit
@@ -148,8 +156,8 @@ def getRegisters(client: ModbusTcpClient):
         "connected":          (40188, client.DATATYPE.UINT16,  1, 0,     "Is Connected",                      ""),
         "power_max_lim":      (40189, client.DATATYPE.UINT16,  1, 0.1,   "Power Max",                        "%"),
         "power_max_lim_ena":  (40193, client.DATATYPE.UINT16,  1, 0,     "Power Max Ena",                     ""),
-        "DC1 power":          (40246, client.DATATYPE.FLOAT32, 2, 0,     "DC1 power",                        "W"),
-        "DC2 power":          (40248, client.DATATYPE.FLOAT32, 2, 0,     "DC2 power",                        "W"),
+        "DC1_power":          (40246, client.DATATYPE.FLOAT32, 2, 0,     "DC1 power",                        "W"),
+        "DC2_power":          (40248, client.DATATYPE.FLOAT32, 2, 0,     "DC2 power",                        "W"),
     }
     return registers
 

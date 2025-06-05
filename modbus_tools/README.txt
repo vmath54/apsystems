@@ -21,7 +21,7 @@ Les registres qu'on peut modifier sont (voir doc APSystems_modbus_registers.xlsx
 - 9CFD - 40189 : 'WMaxLimPct ; valeur de 0 à 300, qui corespond à 0% - 30% (facteur de 10). Permet de limiter la production solaire. Par défaut à 300
 - 9D01 - 40193 : 'WMaxLim_Ena' ; valeur 0 ou 1. Permet d'activer (1) ou de désactiver (0) la limitation de production solaire. Par défaut à 1
 
-A noter que je ne comprends pas bien cete valeur de 300 (30%) qui correspond an fait au maximum de production pour le MO ...
+A noter que je ne comprends pas bien cette valeur de 300 (30%) qui correspond an fait au maximum de production pour le MO ...
 
 syntaxe : 
   write_MO.py -h pour de l'aide
@@ -37,7 +37,8 @@ syntaxe :
   read_all_MO.py 192.168.1.120 -u 1,11,12 : interrogation de l'ECU a l'adresse IP 192.168.1.120, pour les MO d'ID modbus 1,11,12
 
 
------------------------- un exemple d'utilisation de ces scripts (fin de journée, peu de production) ----------------
+------------------------ un exemple d'utilisation de ces scripts ----------------
+########
 >read_MO.py 192.168.1.120 -u 11
 Manufacturer = APsystems
 Model = DS3
@@ -45,58 +46,72 @@ Version = V5312
 Serial Number = 704000587038
 Modbus ID = 11
 Type Inverter = 101
-current = 1.08 A
-voltage = 239.0 V
-power = 256.0 W
+current = 0.79 A
+voltage = 234.0 V
+power = 182.0 W
 frequency = 50.0 Hz
-Power (Apparent) = 259.7 VA
-Power (Reactive) = 44.0 VAR
-Power Factor = 0.985 cos φ
-Total Energy = 1.3940000000000001 kWh
-Temperature = 34.0 °C
+Power (Apparent) = 186.3 VA
+Power (Reactive) = 40.0 VAR
+Power Factor = 0.976 cos φ
+Total Energy = 2.4210000000000003 kWh
+Temperature = 28.0 °C
 Status = 4
 Is Connected = 1
 Power Max = 30.0 %
 Power Max Ena = 1
-DC1 voltage = 36.16704177856445 V
-DC2 voltage = 35.88479995727539 V
-DC1 current = 3.9195001125335693 A
-DC2 current = 3.9195001125335693 A
-DC1 power = 141.75672912597656 W
-DC2 power = 140.65048217773438 W
+DC1 voltage = 33.405120849609375 V
+DC2 voltage = 33.68735885620117 V
+DC1 current = 3.1473000049591064 A
+DC2 current = 2.924999952316284 A
+DC1 power = 105.13594055175781 W
+DC2 power = 98.5355224609375 W
 
+########
 >read_all_MO.py 192.168.1.120 -u 1,11,12
 liste des équipements scannes : 1, 11, 12
 
  ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 |      ID       |     power     | Total Energy  |  Temperature  |    Status     | Is Connected  |   Power Max   | Power Max Ena |   DC1 power   |   DC2 power   |
-|       1       |     123 W     |   1.303 kWh   |     29 °C     |  Producing    |      1        |     30 %      |      1        |     67 W      |     70 W      |
-|      11       |     256 W     |   1.394 kWh   |     34 °C     |  Producing    |      1        |     30 %      |      1        |     142 W     |     141 W     |
-|      12       |     270 W     |   1.357 kWh   |     37 °C     |  Producing    |      1        |     30 %      |      1        |     144 W     |     142 W     |
+|       1       |     155 W     |   2.532 kWh   |     30 °C     |  Producing    |      1        |     30 %      |      1        |     85 W      |     86 W      |
+|      11       |     182 W     |   2.421 kWh   |     28 °C     |  Producing    |      1        |     30 %      |      1        |     105 W     |     99 W      |
+|      12       |     188 W     |   2.394 kWh   |     30 °C     |  Producing    |      1        |     30 %      |      1        |     99 W      |     98 W      |
  ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+Total AC Power : 525 W
+Total DC Power : 572 W
+Total Energy   : 7.347 kWh
 
+########
 >write_MO.py 192.168.1.120 -r power_limit -v 25
 device 1, write register "Power Max". addr : 40189, value : 250
 
+########
 >read_all_MO.py 192.168.1.120 -u 1,11,12
 liste des équipements scannes : 1, 11, 12
 
  ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 |      ID       |     power     | Total Energy  |  Temperature  |    Status     | Is Connected  |   Power Max   | Power Max Ena |   DC1 power   |   DC2 power   |
-|       1       |     123 W     |   1.303 kWh   |     29 °C     |  Producing    |      1        |     25 %      |      1        |     67 W      |     70 W      |
-|      11       |     256 W     |   1.394 kWh   |     34 °C     |  Producing    |      1        |     25 %      |      1        |     142 W     |     141 W     |
-|      12       |     270 W     |   1.357 kWh   |     37 °C     |  Producing    |      1        |     25 %      |      1        |     144 W     |     142 W     |
+|       1       |     155 W     |   2.532 kWh   |     30 °C     |  Producing    |      1        |     25 %      |      1        |     85 W      |     86 W      |
+|      11       |     182 W     |   2.421 kWh   |     28 °C     |  Producing    |      1        |     25 %      |      1        |     105 W     |     99 W      |
+|      12       |     188 W     |   2.394 kWh   |     30 °C     |  Producing    |      1        |     25 %      |      1        |     99 W      |     98 W      |
  ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+Total AC Power : 525 W
+Total DC Power : 572 W
+Total Energy   : 7.347 kWh
 
+########
 >write_MO.py 192.168.1.120 -r power_limit -v 30
 device 1, write register "Power Max". addr : 40189, value : 300
 
-E:\temp\solaire\VM>read_all_MO.py 192.168.1.120 -u 1,11,12
+########
+>read_all_MO.py 192.168.1.120 -u 1,11,12
 liste des équipements scannes : 1, 11, 12
 
  ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 |      ID       |     power     | Total Energy  |  Temperature  |    Status     | Is Connected  |   Power Max   | Power Max Ena |   DC1 power   |   DC2 power   |
-|       1       |     123 W     |   1.303 kWh   |     29 °C     |  Producing    |      1        |     30 %      |      1        |     67 W      |     70 W      |
-|      11       |     256 W     |   1.394 kWh   |     34 °C     |  Producing    |      1        |     30 %      |      1        |     142 W     |     141 W     |
-|      12       |     270 W     |   1.357 kWh   |     37 °C     |  Producing    |      1        |     30 %      |      1        |     144 W     |     142 W     |
+|       1       |     155 W     |   2.532 kWh   |     30 °C     |  Producing    |      1        |     30 %      |      1        |     85 W      |     86 W      |
+|      11       |     182 W     |   2.421 kWh   |     28 °C     |  Producing    |      1        |     30 %      |      1        |     105 W     |     99 W      |
+|      12       |     188 W     |   2.394 kWh   |     30 °C     |  Producing    |      1        |     30 %      |      1        |     99 W      |     98 W      |
  ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+Total AC Power : 525 W
+Total DC Power : 572 W
+Total Energy   : 7.347 kWh

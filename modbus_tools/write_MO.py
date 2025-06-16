@@ -7,12 +7,15 @@ teste avec des MO DS3
 
 syntaxe : 
   write_MO.py -h pour de l'aide
-  write_MO.py 192.168.1.120 -u 1 -r connected -v 1 : connection de l'ECU a l'adresse IP 192.168.1.120. Ecriture dans le MO d'ID modbus 1, registre connected, valeur 1
+  write_MO.py 192.168.1.120 -u 1 -r power_limit -v 25 : connection de l'ECU a l'adresse IP 192.168.1.120. Ecriture dans le MO d'ID modbus 1, registre power_limit, valeur 25 (qui correspond en fait à l'écriture de la valeur 250 du registre 40189)
   Les registres que l'on peut ecrire sont :
     . connected : registre 40188, booléen (0/1). Si 0, les MO ne produisent plus ; si 1, les MO produisent
     . power_limit_ena : registre 40193, booléen (0/1). Si 0, la limitation de puissance est désactivée ; si 1, la limite est active
-    . power_limit : registre 40189. Valeur de 0 à 30, 30 étant la valeur par défaut, puissance max. En realité, il y a un facteur 10 :
-                    si -v 25, alors la valeur 250 sera écrite
+    . power_limit : registre 40189. Valeur de 0 à 100, c'est une limitation de puissance relative à la puissance max du MO. 
+                    par exemple, pour un DS3 ayant une puissancec max de 880W, un power_limit à 25 limitera la puissance du MO à 220W
+                    En realité, il y a un facteur 10 : si -v 25, alors la valeur 250 sera écrite dnas le registre 40189
+                    
+A noter : pour ces 3 registres, la modification est globale à l'installation. On spécifie un équipement (unit), mais la valeur écrite est globale                   
 """
 
 import argparse
@@ -44,8 +47,8 @@ def main() -> None:
             print(f"### ERREUR. Le registre '{args.register}' ne peut prendre que la valeur 0 ou 1")
             exit()
     if (args.register == 'power_limit'):
-        if(args.value < 0) or (args.value > 30):
-            print("### ERREUR. Le registre 'power_limit' ne peut prendre qu'une valeur entre 0 et 30")
+        if(args.value < 0) or (args.value > 100):
+            print("### ERREUR. Le registre 'power_limit' ne peut prendre qu'une valeur entre 0 et 100")
             exit()
         else:
             args.value *= 10  # facteur 10 pour le registre power_limit

@@ -2,8 +2,10 @@ Utilitaires pour interroger / modifier un ECU en protocole modbus
 -----------------------------------------------------------------
 Testés avec un ECU-R en version 2162xxxxxxxx, et des micro onduleurs (MO) DS3
 
-Ces scripts ne sont pas optimisés pour une production : ils génère une requete modbus pour chaque registre à lire, ce qui n'est pas très efficace.
+Ces scripts ne sont pas optimisés pour une production : ils génèrent une requete modbus pour chaque registre à lire, ce qui n'est pas très efficace.
 Ils sont à utiliser pour des tests de fonctionnement
+
+Il est probable qu'ils fonctionnent avec d'autres MO APSystems, avec peutêtre quelques adaptations
 
 read_MO.py
 ##########
@@ -18,10 +20,8 @@ Permet d'écrire certains registres du système. On écrit ces registres en spé
 
 Les registres qu'on peut modifier sont (voir doc APSystems_modbus_registers.xlsx) :
 - 9CFC - 40188 : 'Conn' ; valeur 0 ou 1. Permet d'activer (1) ou de désactiver (0) la production solaire. Par défaut à 1
-- 9CFD - 40189 : 'WMaxLimPct ; valeur de 0 à 300, qui corespond à 0% - 30% (facteur de 10). Permet de limiter la production solaire. Par défaut à 300
+- 9CFD - 40189 : 'WMaxLimPct ; valeur de 0 à 1000, qui correspond à 0% - 100% (facteur de 0.1). Permet de limiter la production solaire.
 - 9D01 - 40193 : 'WMaxLim_Ena' ; valeur 0 ou 1. Permet d'activer (1) ou de désactiver (0) la limitation de production solaire. Par défaut à 1
-
-A noter que je ne comprends pas bien cette valeur de 300 (30%) qui correspond an fait au maximum de production pour le MO ...
 
 syntaxe : 
   write_MO.py -h pour de l'aide

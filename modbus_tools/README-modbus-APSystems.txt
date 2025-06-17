@@ -47,8 +47,8 @@ ATTENTION : la lecture de ces 2 registres est très déroutante dans l'installat
 
 Coté écriture, c'est simple :
 - si power_limit_ena est à 1 : lorsqu'on modifie la valeur de power_limit, la puissance maxi de tous les MO de l'installation s'adapte à cette valeur. C'est quasi-immédiat, ça fonctionne très bien.
-- si on passe power_limit_ena à 0, la puissance maxi des MO revient à la puissance maxi possible ; donc à 100%, quelque soit la valeur de power_limit
-- si on passe power_limit_ena à 1, la puissance maxi des MO prend la valeur de power_limit
+- si on passe power_limit_ena à 0, la puissance maxi des MO revient à la puissance maxi possible ; donc à 100%, quelque soit la valeur de power_limit lue
+- si on passe power_limit_ena à 1, la puissance maxi des MO prend la valeur de power_limit lue
 - lorsque power_limit_ena a la valeur 0, une modification de power_limit ne change rien : la production restera au maximum.
 
 Coté lecture, c'est beaucoup plus bizarre :
@@ -61,20 +61,20 @@ On peut donc facilement faire de mauvaises interprêtations, car la lecture des 
 Ce que j'en déduis, pour les registres en lecture/écriture
 ----------------------------------------------------------
 
-Je n'ai pas creusé le fonctionnement du registre Conn, qui permet d'arrêter la production ; je ne serais pas surpris que l'ECU se contente d'envoyer un power_limit à 0% lorsqu'on le passe à 0 ; et la valeur affichée de power_limit lorsqu'on le passe à 1 (ou 100% si power_limit_ena est à 0)
+Je n'ai pas creusé le fonctionnement du registre Conn, qui permet d'arrêter la production ; je ne serais pas surpris que l'ECU se contente d'envoyer un power_limit à 0% lorsqu'on le passe à 0 ; et la valeur affichée de power_limit lue lorsqu'on le passe à 1 (ou 100% si power_limit_ena est à 0)
 
 - ces paramètres sont globaux à l'installation, ils sont mémorisés dans l'ECU (certain)
 - ils fonctionnent bien, en écriture
 - il n'y a pas de retour d'information des MO vers l'ECU concernant ces paramètres
 - l'ECU se contente de mémoriser ces infos, quand elles sont écrites en modbus. Il ne restitue en lecture que l'état de sa mémoire, pas l'état réel de l'installation
 - je suppose que les MO ne recoivent et ne mémorisent que le paramètre power_lim. Il est envoyé à chaque changement d'un des 3 registres en modbus, et uniquement à ce moment.
-- quand l'ECU n'a pas d'info (redémarrage, le matin, ...), par défaut, il indique en lecture power_limit = 30%, power_limit_ena = 1, Conn = 1 ; alors que la valeur power_limit ne correspond pas nécessairement à celle mémorisée par les MO, et que les MO ne gèrent pas les 2 autres (certain)
+- quand l'ECU n'a pas d'info (redémarrage, le matin, ...), par défaut, il indique en lecture power_limit = 30%, power_limit_ena = 1, Conn = 1 ; alors que la valeur power_limit ne correspond pas nécessairement à celle mémorisée par les MO (celle de la veille), et que les MO ne gèrent pas les 2 autres (certain)
 - le registre power_limit_ena, en écriture, n'est utilisé que lors d'un changement par commande modbus :
-   . si 0, l'ECU envoie un ordre de limitation de puissance à 100%, quelque soit la valeur de power_limit
+   . si 0, l'ECU envoie un ordre de limitation de puissance à 100%, quelque soit la valeur de power_limit lue
    . si 1, l'ECU envoie un ordre de limitation de puissance égale à la valeur power_lim qu'il a en mémoire (donc la valeur lue). 
 - je suppose que le registre Conn fonctionne de la même manière ; pas testé.
 
 Conseil 
 -------
 
-Si vous souhaitez pouvoir moduler la puissance de production de votre installation en modbus, il suffit de n'intervenir que sur la valeur de power_limit : on peut faire varier celle-ci de 0 à 100%, il n'y a donc pas besoin d'intervenir sur les 2 autres registres.
+Si vous souhaitez pouvoir moduler la puissance de production de votre installation en modbus, il suffit de n'intervenir que sur la valeur de power_limit : on peut faire varier celle-ci de 0 à 100%, il n'y a donc pas besoin d'intervenir sur les 2 autres registres, qui apportent un niveau de complexité supplémentaire.

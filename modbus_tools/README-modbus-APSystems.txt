@@ -43,7 +43,7 @@ Pour un DS3 de puissance maxi de 880W, une valeur de WMaxLimPct à 500 limite la
 Dans la suite de ce texte, je nommerais power_limit la valeur de WMaxLimPct divisée par 10 ; ça sera donc le réel pourcentage de limitation du MO.
 Et je nommerais power_limit_ena le registre WMaxLim_Ena
 
-ATTENTION : la lecture de ces 2 registres est très déroutante dans l'installation APSystems.
+ATTENTION : la lecture de ces 3 registres est très déroutante dans l'installation APSystems : elle ne représente pas nécessairement l'état réel du fonctionnement des MO.
 
 Coté écriture, c'est simple :
 - si power_limit_ena est à 1 : lorsqu'on modifie la valeur de power_limit, la puissance maxi de tous les MO de l'installation s'adapte à cette valeur. C'est quasi-immédiat, ça fonctionne très bien.
@@ -52,7 +52,7 @@ Coté écriture, c'est simple :
 - lorsque power_limit_ena a la valeur 0, une modification de power_limit ne change rien : la production restera au maximum.
 
 Coté lecture, c'est beaucoup plus bizarre :
-- lorsqu'on met en marche pour la première fois l'installation, la lecture donne power_limit_ena = 1 et power_limit = 30% ; alors que l'installation fonctionne à 100%
+- lorsqu'on met en marche pour la première fois l'installation, la lecture donne Conn = 1, power_limit_ena = 1 et power_limit = 30% ; alors que l'installation fonctionne à 100%
 - si on arrête électriquement l'ECU et qu'on le redémarre, la lecture donne toujours power_limit_ena = 1 et power_limit = 30%, quelque soit la valeur d'avant. En réalité, les MO ont conservé l'ancienne valeur de power_limit ; il n'y a donc pas nécessairement correspondance entre la valeur affichée et la valeur réellement prise en compte par le MO.
 - même phénomène lorsqu'on passe d'un jour à l'autre ; donc lorsque les MO s'arrêtent de fonctionner au coucher du soleil, et repartent au lever.
 
@@ -63,18 +63,35 @@ Ce que j'en déduis, pour les registres en lecture/écriture
 
 Je n'ai pas creusé le fonctionnement du registre Conn, qui permet d'arrêter la production ; je ne serais pas surpris que l'ECU se contente d'envoyer un power_limit à 0% lorsqu'on le passe à 0 ; et la valeur affichée de power_limit lue lorsqu'on le passe à 1 (ou 100% si power_limit_ena est à 0)
 
-- ces paramètres sont globaux à l'installation, ils sont mémorisés dans l'ECU (certain)
+- ces 3 paramètres sont globaux à l'installation, ils sont mémorisés dans l'ECU (certain)
 - ils fonctionnent bien, en écriture
 - il n'y a pas de retour d'information des MO vers l'ECU concernant ces paramètres
 - l'ECU se contente de mémoriser ces infos, quand elles sont écrites en modbus. Il ne restitue en lecture que l'état de sa mémoire, pas l'état réel de l'installation
-- je suppose que les MO ne recoivent et ne mémorisent que le paramètre power_lim. Il est envoyé à chaque changement d'un des 3 registres en modbus, et uniquement à ce moment.
+
+Pour les paramètres power_limit et power_limit_ena :
+- je suppose que les MO ne recoivent et ne mémorisent que le paramètre power_lim. Il est envoyé à chaque changement d'un des 2 registres en modbus, et uniquement à ce moment.
 - quand l'ECU n'a pas d'info (redémarrage, le matin, ...), par défaut, il indique en lecture power_limit = 30%, power_limit_ena = 1, Conn = 1 ; alors que la valeur power_limit ne correspond pas nécessairement à celle mémorisée par les MO (celle de la veille), et que les MO ne gèrent pas les 2 autres (certain)
+- une modification du paramètre power_limit est prise en compte immédiatement, mais le changement est progressif et rapide.
+  par exemple, chez moi, mois de 10s pour passer d'une prod de 100% à une prod de 10%, pareil lors du retour à 100%
 - le registre power_limit_ena, en écriture, n'est utilisé que lors d'un changement par commande modbus :
    . si 0, l'ECU envoie un ordre de limitation de puissance à 100%, quelque soit la valeur de power_limit lue
    . si 1, l'ECU envoie un ordre de limitation de puissance égale à la valeur power_lim qu'il a en mémoire (donc la valeur lue). 
 - je suppose que le registre Conn fonctionne de la même manière ; pas testé.
 
+Concernant le paramètre Conn :
+- la prise en compte du paramètre Conn = 0 est immédiate  : les MO s'arrêtent de produire instantanément. Je suppose comme lors d'une coupure du courant.
+- la prise en compte du paramètre Conn = 1 prend un certain temps, comme lors du démarrage initial du MO. C'est la valeur du power_limit lue qui est alors prise en compte
+  Chez moi, pour le DS3 ayant un firmware plus ancien, il faut environ 2mn. Pour les autres le démarrage se produit au bout d'environ 6 mn
+- chose étrange (qui diffère du paramètre power_limit_ena) : lorsque Conn = 0, si on modifie le registre power_limit, les MO vont redémarrer et atteindre la puissance max fixée par la valeur de power_limit lue
+
+A noter
+-------
+
+Je n'ai pas fait d'essais de coupure électrique des MO en cours de journée : je pense que ca coupe le relai électrique interne au MO qui le lie au réseau, et je soupconne qu'il vaut mieux éviter de jouer avec lorsque la production est active
+
 Conseil 
 -------
 
-Si vous souhaitez pouvoir moduler la puissance de production de votre installation en modbus, il suffit de n'intervenir que sur la valeur de power_limit : on peut faire varier celle-ci de 0 à 100%, il n'y a donc pas besoin d'intervenir sur les 2 autres registres, qui apportent un niveau de complexité supplémentaire.
+Si vous souhaitez pouvoir moduler la puissance de production de votre installation en modbus, il suffit de n'intervenir que sur la valeur de power_limit : on peut faire varier celle-ci de 10% à 100% (pas testé en dessous de 10%), il n'y a donc pas besoin d'intervenir sur le registre power_limit_ena, qui apporte un niveau de complexité supplémentaire.
+
+Si vous souhaitez avoir une valeur de power_limit qui reflète la réalité, il suffit de l'écrire (à 100% probablement) en début de journée, dès que les PV commencent de fonctionner. Ca se maitiendra toute la journée ... à moins d'une coupure électrique de l'ECU

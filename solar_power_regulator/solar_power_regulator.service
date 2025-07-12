@@ -1,0 +1,18 @@
+[Unit]
+Description=Solar Power Regulator Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=solar
+
+WorkingDirectory=/opt/solar_power_regulator
+
+ExecStart=/usr/bin/python3 /opt/solar_power_regulator/solar_power_regulator.py --no-daemon --syslog-facility local1 --loglevel debug 192.168.1.120
+
+# Redémarrage automatique en cas de crash
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

@@ -7,5 +7,6 @@ Ma passerelle a un numéro de série en 2162xxxxxxxx
 Le dossier 'modbus_tools' contient des utilitaires écrits en python, qui permettent d'interroger l'ECU en protocole modbus - sunspec ; également de modifier certains registres.
 Ces utilitaires ne sont pas optimisés ; à utiliser pour tests.
 
-Le dossier 'solar_power_regulator' propose un système permettant de limiter l'injection dans le réseau.
+Le dossier 'solar_power_regulator' propose un système permettant de limiter l'injection dans le réseau.  
+Il s'appuie sur un démon (en python) qui fonctionne sur un système debian ou dérivé, et d'un script javascript qui s'exécute sur un Shelly Pro EM.
 

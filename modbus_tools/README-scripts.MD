@@ -1,21 +1,19 @@
-Utilitaires pour interroger / modifier un ECU en protocole modbus
------------------------------------------------------------------
+# <p align="center">Utilitaires pour interroger / modifier un ECU en protocole modbus</p>
+---
 Testés avec un ECU-R en version 2162xxxxxxxx, et des micro onduleurs (MO) DS3
 
 Ces scripts ne sont pas optimisés pour une production : ils génèrent une requete modbus pour chaque registre à lire, ce qui n'est pas très efficace.
-Ils sont à utiliser pour des tests de fonctionnement
+Ils sont à utiliser pour des tests de fonctionnement.
 
-Il est probable qu'ils fonctionnent avec d'autres MO APSystems, avec peutêtre quelques adaptations
+Il est probable qu'ils fonctionnent avec d'autres MO APSystems, avec peut-être quelques adaptations.
 
-read_MO.py
-##########
+## read_MO.py
 Permet de lire les principaux registres exposés par un MO DS3
 syntaxe :
   read_MO.py -h : pour de l'aide
   read_MO.py 192.168.1.120 -u 11 : interrogation de l'ECU a l'adresse IP 192.168.1.120, pour le MO d'ID modbus 11
 
-write_MO.py
-###########
+## write_MO.py
 Permet d'écrire certains registres du système. On écrit ces registres en spécifiant un équipement (ID modbus), mais les modifications sont globales à l'installation.
 
 Les registres qu'on peut modifier sont (voir doc APSystems_modbus_registers.xlsx) :
@@ -29,16 +27,15 @@ syntaxe :
 
   l'attribut r (register) peut prendre 3 valeurs : 'connected', 'power_limit', 'power_limit_ena'
 
-read_all_MO.py
-##############
+## read_all_MO.py
 Permet d'interroger les valeurs essentielles (pour moi) de plusieurs MOs, et de les afficher en mode tableau
 syntaxe : 
   read_all_MO.py -h : pour de l'aide
   read_all_MO.py 192.168.1.120 -u 1,11,12 : interrogation de l'ECU a l'adresse IP 192.168.1.120, pour les MO d'ID modbus 1,11,12
 
-
------------------------- un exemple d'utilisation de ces scripts ----------------
-########
+## un exemple d'utilisation de ces scripts
+### read_MO
+```
 >read_MO.py 192.168.1.120 -u 11
 Manufacturer = APsystems
 Model = DS3
@@ -65,8 +62,9 @@ DC1 current = 3.1473000049591064 A
 DC2 current = 2.924999952316284 A
 DC1 power = 105.13594055175781 W
 DC2 power = 98.5355224609375 W
-
-########
+```
+### read_all_MO
+```
 >read_all_MO.py 192.168.1.120 -u 1,11,12
 liste des équipements scannes : 1, 11, 12
 
@@ -79,12 +77,12 @@ liste des équipements scannes : 1, 11, 12
 Total AC Power : 525 W
 Total DC Power : 572 W
 Total Energy   : 7.347 kWh
-
-########
+```
+### write_MO
+```
 >write_MO.py 192.168.1.120 -r power_limit -v 25
 device 1, write register "Power Max". addr : 40189, value : 250
 
-########
 >read_all_MO.py 192.168.1.120 -u 1,11,12
 liste des équipements scannes : 1, 11, 12
 
@@ -97,12 +95,11 @@ liste des équipements scannes : 1, 11, 12
 Total AC Power : 525 W
 Total DC Power : 572 W
 Total Energy   : 7.347 kWh
-
-########
+```
+```
 >write_MO.py 192.168.1.120 -r power_limit -v 30
 device 1, write register "Power Max". addr : 40189, value : 300
 
-########
 >read_all_MO.py 192.168.1.120 -u 1,11,12
 liste des équipements scannes : 1, 11, 12
 
@@ -115,3 +112,4 @@ liste des équipements scannes : 1, 11, 12
 Total AC Power : 525 W
 Total DC Power : 572 W
 Total Energy   : 7.347 kWh
+```

@@ -122,7 +122,12 @@ C'est le cœur du système, où toute la logique de régulation est implémenté
 * Maintenir un état de la limite de production actuelle (`power_limit`).
 * Appliquer plusieurs algorithmes pour calculer la nouvelle limite de puissance optimale.
 * Envoyer la commande de mise à jour de la limite à l'ECU-R via Modbus TCP.
+* Optionnellement, envoyer en MQTT les informations de production, et les informations d'évenement
 * Gérer des tâches de fond autonomes (watchdog, tranches horaires, vérifications périodiques).
+
+### librairies python à installer
+* pymodbus
+* paho.mqtt
 
 ### Algorithmes de Régulation
 
@@ -150,6 +155,27 @@ Paramètres concernés : **`FAST_DROP_ALGORITHM_ENABLE`**, **`FAST_DROP_THRESHOL
 7.  **Watchdog** : Si le démon ne reçoit aucune nouvelle du Shelly pendant une longue période (1 heure, paramétrable), il considère que le client est défaillant et libère la production à 100% par sécurité.  
 Paramètre concerné : **`WATCHDOG_TIMEOUT_S`**
 
+### MQTT
+
+Le démon a la possibilité d'envoyer des informations vers un serveur MQTT.  
+Le topic par défaut est `/solar_power_regulator` ; il peut écrire dans 2 sous-topics :  
+* **`run`** : ce topic reçoit les infos de production, en format JSON. Par ex :  
+`{"solar": 661, "injection": 259, "power_limit": 11.1, "delay": 3}`
+* **`evt`** : ce topic reçoit les infos d'évenement, en format JSON. Par ex :  
+`{"code": 7, "msg": "FAST_DROP. De 90.0% à 30.1%. Solar=663W, Injection=269W"}`
+
+les messages d'évenement gérés sont les suivants :  
+```
+1:"REGULATION_WINDOWS_IN",     # entrée dans une tranche de régulation
+2:"REGULATION_WINDOWS_OUT",    # sortie d'une tranche de régulation
+3:"MODBUS_ERROR_START",        # erreur modbus.
+4:"MODBUS_ERROR_END",          # fin d'erreur modbus
+5:"POWER_LIMIT_30.0",          # power_limit lu a la valeur 30.0%. Le démon force la valeur 100.0%
+6:"POWER_LIMIT_DIFF",          # power_limit lu est différent du power_limit mémorisé
+7:"FAST_DROP",                 # le démon applique l'algo FAST_DROP
+8:"FAST_RISE",                 # le démon applique l'algo FAST_RISE
+```
+
 ### paramètres de configuration dans le code
 
 | Paramètre                    | Description |
@@ -170,6 +196,9 @@ Paramètre concerné : **`WATCHDOG_TIMEOUT_S`**
 | `FAST_DROP_THRESHOLDS`| Permet de régler l'algo Fast DROP. Voir commentaires dans le code |
 | `FAST_RISE_ALGORITHM_ENABLE` | Active l'algo Fast RISE |
 | `FAST_RISE_THRESHOLDS` | Permet de régler l'algo Fast RISE. Voir commentaires dans le code |
+| `MQTT_ENABLE` | 0 : Désactiver l'envoi d'informations MQTT. 1 : MQTT activé, pour tout. 2 : MQTT activé, mais juste pour les évènements|
+| `MQTT_CONN` | Les infos de connexion MQTT. Voir commentaires dans le code |
+| `MQTT_ROOT_TOPIC` | le topic MQTT racine |
 | `PERIODIC_READ_INTERVAL_S` | En secondes. Intervalle pour effectuer une lecture modbus de controle du registre power_limit |
 | `WATCHDOG_TIMEOUT_S` | En secondes. Si pas d'infos du shelly pendant le temps désigné, power_limit est passé à 100.0% |
 | `PERIODIC_TASK_INTERVAL_S` | En secondes. Intervalle pour les tâches de fond (tranches horaires, etc.) |
@@ -277,7 +306,23 @@ Il faut maintenant gérer la rotation du fichier de log. On va créer le fichier
 sudo service logrotate restart
 ```
 
-# Annexe 2. Particularités du fonctionnement modbus APSystems relative à la modulation de production
+# Annexe 2. Utilitaires proposés
+
+Deux utilitaires sont proposés pour faciliter la mise en oeuvre du système : 
+
+## solar_power_regulator_test.py
+
+C'est un programme python qui peut envoyer au démon un message REST comportant les informations JSON attendues ; donc simuler le fonctionnement du Shelly.  
+Bien entendu, il ne faut pas l'utiliser pendant que le script Shelly fonctionne !!!
+
+## solar_read_mqtt.py
+
+C'est un programme python qui se connecte à un serveur MQTT et qui s'abonne aux topics `solar_power_regulator/run` et `solar_power_regulator/evt`.  
+Il peut écrire des fichiers .csv contenant les informations recueillies. On peut ensuite analyser ces informations à l'aide d'un tableur.  
+Il écrit en stdout les messages lus dans le topic `evt` ; optionnellement, il peut également écrire en stdout les messages lus dans le topic `run`.
+
+
+# Annexe 3. Particularités du fonctionnement modbus APSystems relative à la modulation de production
 
 Pour comprendre les algorithmes mis en oeuvre ici, il est important de bien appréhender les spécificités du fonctionnement de l'environnement APSystems relative à la modulation de production, en modbus.
 
@@ -294,11 +339,11 @@ Les particularités relatives à `power_limit` :
 * en écriture : la réaction est fiable : les MO réagissent rapidement, de manière précise
 * en lecture, c'est beaucoup plus aléatoire, voire vraiment étrange
 
-### écriture de power_limit
+## écriture de power_limit
 
 L'ECU répercute directement la valeur écrite en modbus vers les MO, et ceux-ci réagissent très rapidement. C'est simple, ça marche bien
 
-### lecture du power_limit
+## lecture du power_limit
 
 C'est beaucoup plus étrange.  
 Ce qu'il est important de savoir, c'est que l'ECU ne va pas lire l'état des MO, pour le power_limit ; il se contente de retourner une valeur qu'il conserve en mémoire.  

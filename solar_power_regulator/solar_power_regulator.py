@@ -16,6 +16,7 @@ from collections import deque
 from datetime import datetime
 
 from pymodbus.client import ModbusTcpClient
+import paho.mqtt.client as mqtt
 
 # =================================================================================
 # --- CONFIGURATION DU DÉMON ---
@@ -28,7 +29,7 @@ TOTAL_RATED_SOLAR_POWER = 2640
 
 # --- Gestion horaire ---
 # Format: [("HH:MM", "HH:MM"), ...]
-# Permet de définir des tranches horaires pour activer la limitation d'injection. 
+# Permet de définir des tranches horaires pour activer la limitation d'injection.
 # Laisser la liste vide pour une régulation 24h/24.
 REGULATION_WINDOWS = [("06:00", "22:00")]
 
@@ -77,14 +78,13 @@ CONSECUTIVE_IMPORT_COUNT_FOR_RESET = 15
 # Algorithme pour réduire rapidement la limite de puissance si elle est inutilement haute.
 # Activer l'algorithme "Fast Drop" pour une meilleure réactivité. Il faut que l'information de production solaire (solar_power) soit transmise par le shelly
 FAST_DROP_ALGORITHM_ENABLE = True
-# (injection_sup_a, nb_fois_consecutives, si_limite_actuelle_sup_a, cooldown_en_nb_de_fois)
-FAST_DROP_THRESHOLDS = (30, 2, 500, 5)  # déclenchement si, 2 fois consécutivement, il y a  injection supérieure à 30W 3 et un power_limit > 50.0%. Une fois FAST DROP appliqué, il ne doit pas l'être lors des 5 requetes suivantes
-
+# (injection_sup_a, nb_fois_consecutives, si_limite_actuelle_sup_a, cooldown_en_nb_de_fois, delay_next_request)
+FAST_DROP_THRESHOLDS = (30, 2, 500, 5, 7)  # déclenchement si, 2 fois consécutivement, il y a  injection supérieure à 30W 3 et un power_limit > 50.0%. La requete suivante du shelly interviendra dans 7 secondes. Une fois FAST DROP appliqué, il ne doit pas l'être lors des 5 requetes suivantes.
 # Algorithme pour augmenter rapidement la limite de puissance en cas de forte consommation.
 # Activer l'algorithme "Fast Rise" pour une meilleure réactivité.
 FAST_RISE_ALGORITHM_ENABLE = True
 # (injection_inf_a, nb_fois_consecutives, nouvelle_limite, cooldown_en_nb_de_fois)
-FAST_RISE_THRESHOLDS = (-800, 2, 1000, 5)  # si 2 fois consécutivement, injection inférieure à -1100W (donc importation supérieure à 1100W), on passe power_limit à 100.0% (la valeur 1000). Une fois FAST RISE appliqué, il ne doit pas l'être lors des 5 requetes suivantes
+FAST_RISE_THRESHOLDS = (-800, 2, 1000, 5, 7)  # si 2 fois consécutivement, injection inférieure à -1100W (donc importation supérieure à 1100W), on passe power_limit à 100.0% (la valeur 1000). La requete suivante du shelly interviendra dans 7 secondes. Une fois FAST RISE appliqué, il ne doit pas l'être lors des 5 requetes suivantes
 
 # --- Gestion des états et Watchdog ---
 # Toutes les 15mn, lecture modbus de power_limit pour contrôle.
@@ -94,6 +94,29 @@ WATCHDOG_TIMEOUT_S = 3600
 # Intervalle pour les tâches de fond (tranches horaires, etc.).
 PERIODIC_TASK_INTERVAL_S = 60
 
+# --- Paramètres MQTT ---
+# 0 : Désactiver l'envoi d'informations MQTT. 1 : MQTT activé, pour tout. 2 : MQTT activé, mais juste pour les évènements
+MQTT_ENABLE = 1
+
+# les infos de connexion MQTT
+#    le serveur - le port TCP - le compte de connexion - le mot de passe. 1 si SSL ou TLS
+#MQTT_CONN = ("localhost", 1883, "user", "password", 0)
+MQTT_CONN = ("localhost", 1883, "mqtt_VM", "domotique_VM", 0)
+
+# le topic MQTT racine pour cette fonction. Il y aura ensuite 2 sous-topics : /run pour les infos courantes, /evt pour les évenement
+MQTT_ROOT_TOPIC = "solar_power_regulator"
+
+#les codes évenements MQTT
+MQTT_EVT_CODE = {
+1:"REGULATION_WINDOWS_IN",     # entrée dans une tranche de régulation
+2:"REGULATION_WINDOWS_OUT",    # sortie d'une tranche de régulation
+3:"MODBUS_ERROR_START",        # erreur modbus. Il ne doit pas y avoir d'autres messages MQTT "MODBUS_ERROR_START" tant qu'il n'y a pas eu de "MODBUS_ERROR_STOP"
+4:"MODBUS_ERROR_END",          # fin d'erreur modbus. Le démon a pu lire ou écrire power_limit en modbus
+5:"POWER_LIMIT_30.0",          # power_limit lu a la valeur 30.0%. Le démon a forcé la valeur 100.0%
+6:"POWER_LIMIT_DIFF",          # power_limit lu est différent du power_limit mémorisé
+7:"FAST_DROP",                 # le démon applique l'algo FAST_DROP
+8:"FAST_RISE",                 # le démon applique l'algo FAST_RISE
+}
 
 # =================================================================================
 # --- CLASSES ET LOGIQUE INTERNE ---
@@ -117,6 +140,7 @@ class RegulationState:
         self.consecutive_deep_import_count = 0
         self.fast_drop_cooldown = 0
         self.fast_rise_cooldown = 0
+        self.last_run_payload = ""
 
     def is_in_regulation_window(self):
         """Vérifie si l'heure actuelle est dans une des fenêtres de régulation."""
@@ -131,7 +155,7 @@ class RegulationState:
         return False
 
 class ModbusController:
-    """Gère la communication Modbus avec l'ECU-R de manière transactionnelle."""
+    """Gère la communication Modbus avec l'ECU-R."""
     def __init__(self, host, port, slave_id):
         self.host, self.port, self.slave_id, self.lock = host, port, slave_id, RLock()
     def _execute_transaction(self, action_func):
@@ -154,6 +178,41 @@ class ModbusController:
         def action(client): return client.write_registers(address=MODBUS_POWER_LIMIT_REGISTER, values=[value_permille], slave=self.slave_id)
         _, status = self._execute_transaction(action)
         return status
+
+class MQTTController:
+    """Gère la connexion et la publication des messages MQTT."""
+    def __init__(self):
+        self.client = None; self.is_connected = False; self.lock = RLock()
+    def _connect(self):
+        with self.lock:
+            if self.is_connected: return
+            try:
+                host, port, user, password, use_tls = MQTT_CONN
+                self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+                self.client.on_disconnect = lambda client, userdata, flags, rc, properties: self.on_disconnect()
+                self.client.username_pw_set(user, password)
+                if use_tls == 1:
+                    self.client.tls_set(tls_version=mqtt.ssl.PROTOCOL_TLS, cert_reqs=mqtt.ssl.CERT_NONE)
+                self.client.connect(host, port, 60)
+                self.client.loop_start()
+                self.is_connected = True
+                logging.info(f"Connexion MQTT à {host}:{port} établie.")
+            except Exception as e:
+                logging.error(f"Echec de la connexion MQTT: {e}")
+                self.is_connected = False
+    def on_disconnect(self):
+        with self.lock: self.is_connected = False
+        logging.warning("Connexion MQTT perdue. Tentative de reconnexion en cours...")
+    def publish(self, topic_suffix, payload):
+        if MQTT_ENABLE == 0: return
+        with self.lock:
+            if not self.is_connected: self._connect()
+            if not self.is_connected: return
+            try:
+                topic = f"{MQTT_ROOT_TOPIC}/{topic_suffix}"
+                self.client.publish(topic, json.dumps(payload), qos=0)
+            except Exception as e:
+                logging.error(f"Echec de la publication MQTT sur le topic {topic}: {e}"); self.is_connected = False
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     """Serveur HTTP qui gère chaque requête dans un thread séparé."""
@@ -183,7 +242,7 @@ class RequestHandler(QuietRequestHandler):
             if state.watchdog_triggered:
                 logging.warning("Communication avec le Shelly rétablie.")
                 state.watchdog_triggered = False
-            
+
             return_code_tuple = ReturnCode.OK
             if state.current_power_limit_permille == -1:
                 return_code_tuple, _ = handle_state_and_reads()
@@ -197,7 +256,7 @@ class RequestHandler(QuietRequestHandler):
                 return
 
             new_limit, increment, threshold_info, next_interval = calculate_new_limit(injection_power, solar_power)
-            
+
             log_msg = f"Solar={solar_power}W, Injection={injection_power}W. Seuil=\"{threshold_info}\". "
             delay_str = "default" if next_interval == -1 else f"{next_interval}s"
             if increment != 0:
@@ -206,12 +265,15 @@ class RequestHandler(QuietRequestHandler):
                 log_msg += f"Pas de changement. Limite: {new_limit/10.0:.1f}%. Delay={delay_str}."
             logging.debug(log_msg)
 
+            if MQTT_ENABLE == 1:
+                run_payload = {"solar": solar_power, "injection": injection_power, "power_limit": new_limit / 10.0, "delay": next_interval}
+                if json.dumps(run_payload) != state.last_run_payload:
+                    mqtt_controller.publish("run", run_payload); state.last_run_payload = json.dumps(run_payload)
             if new_limit != state.current_power_limit_permille:
-                write_status = perform_write(new_limit)
-                if write_status != "OK":
+                if perform_write(new_limit) != "OK":
                      self.send_response_and_exit(ReturnCode.MODBUS_FAILURE, state.current_power_limit_permille, 0, -1)
                      return
-            
+
             self.send_response_and_exit(return_code_tuple, state.current_power_limit_permille, increment, next_interval)
 
     def send_json_response(self, http_code, data):
@@ -228,27 +290,34 @@ class RequestHandler(QuietRequestHandler):
 state = RegulationState()
 state_lock = RLock()
 modbus_controller = None
+mqtt_controller = MQTTController()
 
 def handle_state_and_reads():
-    """Effectue une lecture Modbus, met à jour l'état et gère les cas d'erreur."""
+    """Effectue une lecture Modbus et met à jour l'état."""
     logging.debug("Vérification de l'état Modbus...")
     read_value, status = modbus_controller.read_power_limit()
     if status != "OK":
+        if state.consecutive_modbus_write_errors == 0:
+            mqtt_controller.publish("evt", {"code": 3, "msg": MQTT_EVT_CODE[3]})
         state.consecutive_modbus_write_errors += 1
         if state.consecutive_modbus_write_errors >= MODBUS_RECURRENT_ERROR_COUNT: return ReturnCode.MODBUS_RECURRENT_FAILURE, None
         return ReturnCode.MODBUS_FAILURE, None
     
+    if state.consecutive_modbus_write_errors > 0:
+        mqtt_controller.publish("evt", {"code": 4, "msg": MQTT_EVT_CODE[4]})
     state.last_modbus_read_time = time.time()
     if read_value == BUGGY_LIMIT_PERMILLE:
         logging.warning(f"Valeur lue de {BUGGY_LIMIT_PERMILLE/10.0:.1f}% détectée, correction à {MAX_POWER_LIMIT_PERMILLE/10.0:.1f}%.")
+        mqtt_controller.publish("evt", {"code": 5, "msg": f"{MQTT_EVT_CODE[5]}. Passage forcé à 100.0%"})
         perform_write(MAX_POWER_LIMIT_PERMILLE)
         read_value = MAX_POWER_LIMIT_PERMILLE
         
     return_code = ReturnCode.OK
     if state.current_power_limit_permille != -1 and read_value != state.current_power_limit_permille:
         logging.warning(f"Divergence de power_limit. Mémorisé={state.current_power_limit_permille/10.0:.1f}%, Lu={read_value/10.0:.1f}%.")
+        mqtt_controller.publish("evt", {"code": 6, "msg": f"{MQTT_EVT_CODE[6]}. Read={read_value/10.0:.1f}%, Mem={state.current_power_limit_permille/10.0:.1f}%"})
         return_code = ReturnCode.DIFFERENT_POWER_LIMIT
-    
+
     state.current_power_limit_permille = read_value
     return return_code, read_value
 
@@ -260,47 +329,49 @@ def calculate_new_limit(injection_power, solar_power):
     # Gestion des cooldowns
     if state.fast_drop_cooldown > 0: state.fast_drop_cooldown -= 1
     if state.fast_rise_cooldown > 0: state.fast_rise_cooldown -= 1
-    
+
     # --- ALGO 1: FAST RISE ---
     if FAST_RISE_ALGORITHM_ENABLE:
-        rise_thresh, rise_count, rise_limit, rise_cooldown = FAST_RISE_THRESHOLDS
+        rise_thresh, rise_count, rise_limit, rise_cooldown, drop_next_delay = FAST_RISE_THRESHOLDS
         if injection_power < rise_thresh:
             state.consecutive_deep_import_count += 1
         else:
             state.consecutive_deep_import_count = 0
-    
+
         if state.consecutive_deep_import_count >= rise_count and state.fast_rise_cooldown == 0:
             if last_limit < rise_limit:
-                logging.info(f"FAST RISE: Importation forte détectée. Ajustement rapide de {last_limit/10.0:.1f}% à {rise_limit/10.0:.1f}%.")
+                logging.info(f"FAST RISE: Importation forte détectée. Passage de {last_limit/10.0:.1f}% à {rise_limit/10.0:.1f}%.")
                 state.fast_rise_cooldown = rise_cooldown
                 state.consecutive_deep_import_count = 0
-                return rise_limit, rise_limit - last_limit, "Importation très forte", -1
-            
+                mqtt_controller.publish("evt", {"code": 8, "msg": f"{MQTT_EVT_CODE[8]}. De {last_limit/10.0:.1f}% à {rise_limit/10.0:.1f}%. Solar={solar_power}W, Injection={injection_power}W"})
+                return rise_limit, rise_limit - last_limit, "Importation très forte", drop_next_delay
+
     # --- ALGO 2: FAST DROP ---
     if FAST_DROP_ALGORITHM_ENABLE:
-        drop_thresh, drop_count, drop_limit_thresh, drop_cooldown = FAST_DROP_THRESHOLDS
+        drop_thresh, drop_count, drop_limit_thresh, drop_cooldown, drop_next_delay = FAST_DROP_THRESHOLDS
         if injection_power > drop_thresh:
             state.consecutive_high_injection_count += 1
         else:
             state.consecutive_high_injection_count = 0
-        
-        if (state.consecutive_high_injection_count >= drop_count and
-            last_limit > drop_limit_thresh and solar_power > 0 and state.fast_drop_cooldown == 0):
-        
-            estimated_limit = int((solar_power / TOTAL_RATED_SOLAR_POWER) * 1000)
+
+        if (state.consecutive_high_injection_count >= drop_count and last_limit > drop_limit_thresh and solar_power > 0 and state.fast_drop_cooldown == 0):
+            # estimated_limit = int((solar_power / TOTAL_RATED_SOLAR_POWER) * 1000)
+            estimated_limit = int(((solar_power - injection_power) / TOTAL_RATED_SOLAR_POWER) * 1000)
             if estimated_limit < last_limit:
                 logging.info(f"FAST DROP: Injection haute détectée. Ajustement rapide de {last_limit/10.0:.1f}% à {estimated_limit/10.0:.1f}%.")
-                new_limit = estimated_limit + 50 # Marge de 5%
+                # new_limit = estimated_limit + 50 # Marge de 5%
+                new_limit = estimated_limit
                 state.fast_drop_cooldown = drop_cooldown
                 state.consecutive_high_injection_count = 0
-                return new_limit, new_limit - last_limit, "Injection haute", -1
-            
+                mqtt_controller.publish("evt", {"code": 7, "msg": f"{MQTT_EVT_CODE[7]}. De {last_limit/10.0:.1f}% à {new_limit/10.0:.1f}%. Solar={solar_power}W, Injection={injection_power}W"})
+                return new_limit, new_limit - last_limit, "Injection haute", drop_next_delay
+
     # --- ALGO 3: IMPORT LOCK ---
     if injection_power < 0:
         state.consecutive_import_count += 1
         if state.consecutive_import_count >= CONSECUTIVE_IMPORT_COUNT_FOR_RESET:
             if last_limit < MAX_POWER_LIMIT_PERMILLE:
-                logging.info(f"Importation continue détectée. Passage de la production à 100%.")
+                logging.info(f"Importation continue détectée. Passage à 100%.")
             state.consecutive_import_count = 0
             return MAX_POWER_LIMIT_PERMILLE, MAX_POWER_LIMIT_PERMILLE - last_limit, "Importation continue", -1
     else:
@@ -311,31 +382,35 @@ def calculate_new_limit(injection_power, solar_power):
         if injection_power >= threshold:
             lower_bound_str, upper_bound_str = f"{threshold}W", f"<{INJECTION_POWER_THRESHOLDS[i-1][0]}W" if i > 0 else ""
             threshold_info = f"{lower_bound_str}..{upper_bound_str}" if upper_bound_str else f">{lower_bound_str}"
-            
+
             if increment == 0: return last_limit, 0, threshold_info, interval
-            
+
             new_limit = last_limit + increment
             new_limit = max(MIN_POWER_LIMIT_PERMILLE, min(new_limit, MAX_POWER_LIMIT_PERMILLE))
-            
+
             if last_limit == MAX_POWER_LIMIT_PERMILLE and new_limit == MAX_POWER_LIMIT_PERMILLE: interval = -1
             if round(new_limit) == BUGGY_LIMIT_PERMILLE: new_limit += 10 if increment > 0 else -10
-            
+
             return new_limit, new_limit - last_limit, threshold_info, interval
-            
+
     return last_limit, 0, "Hors plage", -1
 
 def perform_write(limit_to_write):
-    """Wrapper pour l'écriture Modbus qui gère l'état des erreurs."""
+    """Wrapper pour l'écriture Modbus."""
     status = modbus_controller.write_power_limit(limit_to_write)
     if status == "OK":
+        if state.consecutive_modbus_write_errors > 0:
+            mqtt_controller.publish("evt", {"code": 4, "msg": MQTT_EVT_CODE[4]})
         state.current_power_limit_permille = limit_to_write
         state.consecutive_modbus_write_errors = 0
     else:
+        if state.consecutive_modbus_write_errors == 0:
+            mqtt_controller.publish("evt", {"code": 3, "msg": MQTT_EVT_CODE[3]})
         state.consecutive_modbus_write_errors += 1
     return status
 
 def daemonize():
-    """Détache le processus du terminal pour fonctionner en arrière-plan (mode démon)."""
+    """Détache le processus du terminal (mode démon)."""
     try:
         if os.fork() > 0: sys.exit(0)
     except OSError as e: sys.exit(f"fork #1 failed: {e}\n")
@@ -395,7 +470,10 @@ def handle_periodic_tasks():
     with state_lock:
         is_currently_in_window = state.is_in_regulation_window()
         if is_currently_in_window != state.was_in_regulation_window:
-            logging.info(f"Changement de tranche horaire. {'Entrée en' if is_currently_in_window else 'Sortie de la'} régulation. Passage à 100%.")
+            in_out_str = 'Entrée en' if is_currently_in_window else 'Sortie de la'
+            evt_code = 1 if is_currently_in_window else 2
+            logging.info(f"Changement de tranche horaire. {in_out_str} régulation. Passage à 100%.")
+            mqtt_controller.publish("evt", {"code": evt_code, "msg": MQTT_EVT_CODE[evt_code]})
             perform_write(MAX_POWER_LIMIT_PERMILLE)
             state.was_in_regulation_window = is_currently_in_window
 
@@ -410,20 +488,19 @@ def watchdog_thread():
             if not state.watchdog_triggered and (time.time() - state.last_shelly_request_time > WATCHDOG_TIMEOUT_S):
                 logging.warning(f"WATCHDOG: Aucune requête du Shelly depuis {WATCHDOG_TIMEOUT_S}s. Production à 100%.")
                 if modbus_controller:
-                    modbus_controller.write_power_limit(MAX_POWER_LIMIT_PERMILLE)
-                    state.current_power_limit_permille = MAX_POWER_LIMIT_PERMILLE
+                    perform_write(MAX_POWER_LIMIT_PERMILLE)
                 state.watchdog_triggered = True
         time.sleep(60)
 
 def main():
-    """Point d'entrée principal du script."""
+    """Point d'entrée principal."""
     global modbus_controller
     args = parse_arguments()
     if not args.no_daemon: daemonize()
     setup_logging(args)
     ecu_ip = args.ecu_ip if args.ecu_ip else MODBUS_ECU_IP
     modbus_controller = ModbusController(ecu_ip, args.modbus_port, args.modbus_slave)
-    
+
     Thread(target=watchdog_thread, daemon=True).start()
     Thread(target=periodic_task_thread, daemon=True).start()
 
@@ -433,14 +510,17 @@ def main():
     except OSError as e:
         logging.error(f"Impossible de démarrer le serveur HTTP sur {args.http_host}:{args.http_port}. Erreur: {e}")
         sys.exit(1)
-    
+
     def shutdown_handler(signum, frame):
         logging.info("Signal d'arrêt reçu..."); Thread(target=httpd.shutdown).start()
     signal.signal(signal.SIGTERM, shutdown_handler); signal.signal(signal.SIGINT, shutdown_handler)
-    
-    logging.info(f"Démon v4.2 démarré sur http://{args.http_host}:{args.http_port}")
+
+    logging.info(f"Démon démarré sur http://{args.http_host}:{args.http_port}")
     try: httpd.serve_forever()
     except KeyboardInterrupt: pass
+    if mqtt_controller.client:
+        mqtt_controller.client.loop_stop()
+        mqtt_controller.client.disconnect()
     logging.info("Démon arrêté.")
 
 if __name__ == "__main__":

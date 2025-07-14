@@ -100,8 +100,7 @@ MQTT_ENABLE = 1
 
 # les infos de connexion MQTT
 #    le serveur - le port TCP - le compte de connexion - le mot de passe. 1 si SSL ou TLS
-#MQTT_CONN = ("localhost", 1883, "user", "password", 0)
-MQTT_CONN = ("localhost", 1883, "mqtt_VM", "domotique_VM", 0)
+MQTT_CONN = ("localhost", 1883, "user", "password", 0)
 
 # le topic MQTT racine pour cette fonction. Il y aura ensuite 2 sous-topics : /run pour les infos courantes, /evt pour les évenement
 MQTT_ROOT_TOPIC = "solar_power_regulator"

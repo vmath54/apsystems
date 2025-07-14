@@ -57,17 +57,17 @@ BUGGY_LIMIT_PERMILLE = 300
 # Le tri `reverse=True` est essentiel pour que l'algorithme fonctionne correctement.
 INJECTION_POWER_THRESHOLDS = sorted([
 # Seuil d'injection (en W),  Incrément du power_limit,  délai avant prochaine mesure. Si délai = -1, alors c'est la valeur par défaut du shelly
-    (-99999, 200, 3),   # importation supérieure à  600W  -> On augmente power_limit de 20%, la prochaine mesure sera dans 3s
-    (-600,   100, 3),   # importation entre 200W et 600W  -> On augmente power_limit de 10%, la prochaine mesure sera dans 3s
-    (-200,    50, 3),   # importation entre 100W et 200W  -> On augmente power_limit de 5%, la prochaine mesure sera dans 3s
-    (-100,    20, 3),   # importation entre 30W et 100W   -> On augmente power_limit de 2%, la prochaine mesure sera dans 3s
+    (-99999, 200, 5),   # importation supérieure à  600W  -> On augmente power_limit de 20%, la prochaine mesure sera dans 5s
+    (-600,   100, 5),   # importation entre 200W et 600W  -> On augmente power_limit de 10%, la prochaine mesure sera dans 5s
+    (-200,    50, 5),   # importation entre 100W et 200W  -> On augmente power_limit de 5%, la prochaine mesure sera dans 5s
+    (-100,    20, 5),   # importation entre 30W et 100W   -> On augmente power_limit de 2%, la prochaine mesure sera dans 5s
     (-30,     10,-1),   # importation entre 0W et 30W     -> On augmente power_limit de 1%, la prochaine mesure sera la valeur par défaut du shelly
     (0,        0,-1),   # !!! c'est la plage recherchée : injection entre 0W et 30W -> on ne fait rien, la prochaine mesure sera la valeur par défaut du shelly
     (30,      -5,-1),   # injection entre 30W et 60W      -> On diminue power_limit de 0.5%, la prochaine mesure sera la valeur par défaut du shelly
-    (60,     -10, 3),   # injection entre 60W et 130W     -> On diminue power_limit de 1%, la prochaine mesure sera dans 3s
-    (130,    -50, 3),   # injection entre 100W et 250W    -> On diminue power_limit de 5%, la prochaine mesure sera dans 3s
-    (250,   -100, 3),   # injection entre 250W et 600W    -> On diminue power_limit de 10%, la prochaine mesure sera dans 3s
-    (600,   -200, 3),   # injection supérieure à 600W     -> On diminue power_limit de 20%, la prochaine mesure sera dans 3s
+    (60,     -10, 5),   # injection entre 60W et 130W     -> On diminue power_limit de 1%, la prochaine mesure sera dans 5s
+    (130,    -50, 5),   # injection entre 100W et 250W    -> On diminue power_limit de 5%, la prochaine mesure sera dans 5s
+    (250,   -100, 5),   # injection entre 250W et 600W    -> On diminue power_limit de 10%, la prochaine mesure sera dans 5s
+    (600,   -200, 5),   # injection supérieure à 600W     -> On diminue power_limit de 20%, la prochaine mesure sera dans 5s
 ], key=lambda x: x[0], reverse=True)
 
 
@@ -79,12 +79,12 @@ CONSECUTIVE_IMPORT_COUNT_FOR_RESET = 15
 # Activer l'algorithme "Fast Drop" pour une meilleure réactivité. Il faut que l'information de production solaire (solar_power) soit transmise par le shelly
 FAST_DROP_ALGORITHM_ENABLE = True
 # (injection_sup_a, nb_fois_consecutives, si_limite_actuelle_sup_a, cooldown_en_nb_de_fois, delay_next_request)
-FAST_DROP_THRESHOLDS = (30, 2, 500, 5, 7)  # déclenchement si, 2 fois consécutivement, il y a  injection supérieure à 30W 3 et un power_limit > 50.0%. La requete suivante du shelly interviendra dans 7 secondes. Une fois FAST DROP appliqué, il ne doit pas l'être lors des 5 requetes suivantes.
+FAST_DROP_THRESHOLDS = (30, 2, 500, 5, 10)  # déclenchement si, 2 fois consécutivement, il y a  injection supérieure à 30W 3 et un power_limit > 50.0%. La requete suivante du shelly interviendra dans 10 secondes. Une fois FAST DROP appliqué, il ne doit pas l'être lors des 5 requetes suivantes.
 # Algorithme pour augmenter rapidement la limite de puissance en cas de forte consommation.
 # Activer l'algorithme "Fast Rise" pour une meilleure réactivité.
 FAST_RISE_ALGORITHM_ENABLE = True
 # (injection_inf_a, nb_fois_consecutives, nouvelle_limite, cooldown_en_nb_de_fois)
-FAST_RISE_THRESHOLDS = (-800, 2, 1000, 5, 7)  # si 2 fois consécutivement, injection inférieure à -1100W (donc importation supérieure à 1100W), on passe power_limit à 100.0% (la valeur 1000). La requete suivante du shelly interviendra dans 7 secondes. Une fois FAST RISE appliqué, il ne doit pas l'être lors des 5 requetes suivantes
+FAST_RISE_THRESHOLDS = (-800, 2, 1000, 5, 10)  # si 2 fois consécutivement, injection inférieure à -1100W (donc importation supérieure à 1100W), on passe power_limit à 100.0% (la valeur 1000). La requete suivante du shelly interviendra dans 10 secondes. Une fois FAST RISE appliqué, il ne doit pas l'être lors des 5 requetes suivantes
 
 # --- Gestion des états et Watchdog ---
 # Toutes les 15mn, lecture modbus de power_limit pour contrôle.

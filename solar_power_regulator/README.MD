@@ -26,7 +26,7 @@ Je suis très satisfait du résultat, que je peux maintenant adapter et paramét
 Il reste en ce moment en état "Proof Of Concept" : il fonctionne, il mérite des améliorations.   
 
 La fréquence d'envoi par le Shelly des informations d'injection ou d'importation d'énergie électrique vers le démon entrainent une latence dans la régulation, dans le cas de variation très rapide. Ces variations très rapides sont fréquentes, surtout du côté consommation : fonctionnement d'un lave-vaisselle, ...  
-J'estime malgré tout que le fonctionnement est assez satisfaisant.
+Même une imprimante laser domestique, qui déclenche deux pics de consommation de 1200W après la mise sous tension. J'estime malgré tout que le fonctionnement est assez satisfaisant.
 
 Il sera bien sûr nécessaire d'adapter les paramètres par rapport à son installation.  
 Conseil : tester en mode `debug` pendant une certaine période pour les adapter au plus près.

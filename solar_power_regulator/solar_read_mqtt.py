@@ -16,7 +16,8 @@ import paho.mqtt.client as mqtt
 # --- Paramètres de connexion MQTT par défaut ---
 # (IP/hostname, port, user, password, 1 si SSL/TLS sinon 0)
 # Le user et le password peuvent être surchargés par les arguments de la ligne de commande.
-MQTT_CONN = ("localhost", 1883, "user", "password", 0)
+#MQTT_CONN = ("localhost", 1883, "user", "password", 0)
+MQTT_CONN = ("192.168.1.147", 1883, "mqtt_VM", "domotique_VM", 0)
 
 # --- Topic MQTT racine ---
 MQTT_ROOT_TOPIC = "solar_power_regulator"
@@ -56,17 +57,19 @@ def on_message(client, userdata, msg):
 
         # Traitement du topic /run
         if msg.topic == f"{MQTT_ROOT_TOPIC}/run":
+            payload['conso'] = payload.get('solar') - payload.get('injection')
             if userdata['file_infos']:
                 row = [
                     timestamp,
                     payload.get('solar', ''),
                     payload.get('injection', ''),
+                    payload.get('conso', ''),
                     payload.get('power_limit', ''),
                     payload.get('delay', '')
                 ]
                 write_csv_row(userdata['file_infos'], row)
             if userdata['verbose']:
-                logging.info(f"[RUN] Solar: {payload.get('solar')}W, Injection: {payload.get('injection')}W, Limite: {payload.get('power_limit')}%")
+                logging.info(f"[RUN] Solar: {payload.get('solar')}W, Injection: {payload.get('injection')}W, Conso: {payload.get('conso')}W, Limite: {payload.get('power_limit')}%")
 
         # Traitement du topic /evt
         elif msg.topic == f"{MQTT_ROOT_TOPIC}/evt":
@@ -114,7 +117,7 @@ def main():
 
     if args.file_infos:
         logging.info(f"Infos de production dans fichier {args.file_infos}")
-        prepare_csv_file(args.file_infos, ['time', 'solar', 'injection', 'power_limit', 'delay'])
+        prepare_csv_file(args.file_infos, ['time', 'solar', 'injection', 'conso', 'power_limit', 'delay'])
     else:
         logging.info("Infos de production pas enregistrés")
     if args.file_evt:

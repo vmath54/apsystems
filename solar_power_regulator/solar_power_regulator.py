@@ -78,13 +78,21 @@ CONSECUTIVE_IMPORT_COUNT_FOR_RESET = 15
 # Algorithme pour réduire rapidement la limite de puissance si elle est inutilement haute.
 # Activer l'algorithme "Fast Drop" pour une meilleure réactivité. Il faut que l'information de production solaire (solar_power) soit transmise par le shelly
 FAST_DROP_ALGORITHM_ENABLE = True
-# (injection_sup_a, nb_fois_consecutives, si_limite_actuelle_sup_a, cooldown_en_nb_de_fois, delay_next_request)
-FAST_DROP_THRESHOLDS = (30, 2, 500, 5, 10)  # déclenchement si, 2 fois consécutivement, il y a  injection supérieure à 30W 3 et un power_limit > 50.0%. La requete suivante du shelly interviendra dans 10 secondes. Une fois FAST DROP appliqué, il ne doit pas l'être lors des 5 requetes suivantes.
+
+# (injection_sup_a, nb_fois_consecutives, si_limite_actuelle_sup_a, delay_next_request)
+FAST_DROP_THRESHOLDS = (30, 2, 500, 10)  # déclenchement si, 2 fois consécutivement, il y a  injection supérieure à 30W 3 et un power_limit > 50.0%. La requete suivante du shelly interviendra dans 10 secondes.
+
 # Algorithme pour augmenter rapidement la limite de puissance en cas de forte consommation.
 # Activer l'algorithme "Fast Rise" pour une meilleure réactivité.
 FAST_RISE_ALGORITHM_ENABLE = True
-# (injection_inf_a, nb_fois_consecutives, nouvelle_limite, cooldown_en_nb_de_fois)
-FAST_RISE_THRESHOLDS = (-800, 2, 1000, 5, 10)  # si 2 fois consécutivement, injection inférieure à -1100W (donc importation supérieure à 1100W), on passe power_limit à 100.0% (la valeur 1000). La requete suivante du shelly interviendra dans 10 secondes. Une fois FAST RISE appliqué, il ne doit pas l'être lors des 5 requetes suivantes
+
+# (injection_inf_a, nb_fois_consecutives, nouvelle_limite, delay_next_request)
+FAST_RISE_THRESHOLDS = (-800, 2, 1000, 10)  # si 2 fois consécutivement, injection inférieure à -1100W (donc importation supérieure à 1100W), on passe power_limit à 100.0% (la valeur 1000). La requete suivante du shelly interviendra dans 10 secondes.
+
+# le nombre de requetes en régulation par seuil minimum avant de pouvoir appliquer un algo 'FAST', plus violent
+# L'objectif est de ne pas enchainer des FAST_DROP, FAST_RISE, ... successifs
+FAST_COOLDOWN_NB = 5
+
 
 # --- Gestion des états et Watchdog ---
 # Toutes les 15mn, lecture modbus de power_limit pour contrôle.
@@ -137,8 +145,7 @@ class RegulationState:
         self.consecutive_import_count = 0
         self.consecutive_high_injection_count = 0
         self.consecutive_deep_import_count = 0
-        self.fast_drop_cooldown = 0
-        self.fast_rise_cooldown = 0
+        self.fast_cooldown = 0
         self.last_run_payload = ""
 
     def is_in_regulation_window(self):
@@ -325,42 +332,39 @@ def calculate_new_limit(injection_power, solar_power):
     last_limit = state.current_power_limit_permille
     if last_limit == -1: return -1, 0, "État inconnu", -1
 
-    # Gestion des cooldowns
-    if state.fast_drop_cooldown > 0: state.fast_drop_cooldown -= 1
-    if state.fast_rise_cooldown > 0: state.fast_rise_cooldown -= 1
+    # Gestion du cooldown
+    if state.fast_cooldown > 0: state.fast_cooldown -=1
 
     # --- ALGO 1: FAST RISE ---
     if FAST_RISE_ALGORITHM_ENABLE:
-        rise_thresh, rise_count, rise_limit, rise_cooldown, drop_next_delay = FAST_RISE_THRESHOLDS
+        rise_thresh, rise_count, rise_limit, drop_next_delay = FAST_RISE_THRESHOLDS
         if injection_power < rise_thresh:
             state.consecutive_deep_import_count += 1
         else:
             state.consecutive_deep_import_count = 0
 
-        if state.consecutive_deep_import_count >= rise_count and state.fast_rise_cooldown == 0:
+        if state.consecutive_deep_import_count >= rise_count and state.fast_cooldown == 0:
             if last_limit < rise_limit:
                 logging.info(f"FAST RISE: Importation forte détectée. Passage de {last_limit/10.0:.1f}% à {rise_limit/10.0:.1f}%.")
-                state.fast_rise_cooldown = rise_cooldown
+                state.fast_cooldown = FAST_COOLDOWN_NB
                 state.consecutive_deep_import_count = 0
                 mqtt_controller.publish("evt", {"code": 8, "msg": f"{MQTT_EVT_CODE[8]}. De {last_limit/10.0:.1f}% à {rise_limit/10.0:.1f}%. Solar={solar_power}W, Injection={injection_power}W"})
                 return rise_limit, rise_limit - last_limit, "Importation très forte", drop_next_delay
 
     # --- ALGO 2: FAST DROP ---
     if FAST_DROP_ALGORITHM_ENABLE:
-        drop_thresh, drop_count, drop_limit_thresh, drop_cooldown, drop_next_delay = FAST_DROP_THRESHOLDS
+        drop_thresh, drop_count, drop_limit_thresh, drop_next_delay = FAST_DROP_THRESHOLDS
         if injection_power > drop_thresh:
             state.consecutive_high_injection_count += 1
         else:
             state.consecutive_high_injection_count = 0
 
-        if (state.consecutive_high_injection_count >= drop_count and last_limit > drop_limit_thresh and solar_power > 0 and state.fast_drop_cooldown == 0):
-            # estimated_limit = int((solar_power / TOTAL_RATED_SOLAR_POWER) * 1000)
+        if (state.consecutive_high_injection_count >= drop_count and last_limit > drop_limit_thresh and solar_power > 0 and state.fast_cooldown == 0):
             estimated_limit = int(((solar_power - injection_power) / TOTAL_RATED_SOLAR_POWER) * 1000)
             if estimated_limit < last_limit:
                 logging.info(f"FAST DROP: Injection haute détectée. Ajustement rapide de {last_limit/10.0:.1f}% à {estimated_limit/10.0:.1f}%.")
-                # new_limit = estimated_limit + 50 # Marge de 5%
                 new_limit = estimated_limit
-                state.fast_drop_cooldown = drop_cooldown
+                state.fast_cooldown = FAST_COOLDOWN_NB
                 state.consecutive_high_injection_count = 0
                 mqtt_controller.publish("evt", {"code": 7, "msg": f"{MQTT_EVT_CODE[7]}. De {last_limit/10.0:.1f}% à {new_limit/10.0:.1f}%. Solar={solar_power}W, Injection={injection_power}W"})
                 return new_limit, new_limit - last_limit, "Injection haute", drop_next_delay
@@ -388,7 +392,7 @@ def calculate_new_limit(injection_power, solar_power):
             new_limit = max(MIN_POWER_LIMIT_PERMILLE, min(new_limit, MAX_POWER_LIMIT_PERMILLE))
 
             if last_limit == MAX_POWER_LIMIT_PERMILLE and new_limit == MAX_POWER_LIMIT_PERMILLE: interval = -1
-            if round(new_limit) == BUGGY_LIMIT_PERMILLE: new_limit += 10 if increment > 0 else -10
+            if round(new_limit) == BUGGY_LIMIT_PERMILLE: new_limit += 5 if increment > 0 else -5
 
             return new_limit, new_limit - last_limit, threshold_info, interval
 
@@ -396,6 +400,8 @@ def calculate_new_limit(injection_power, solar_power):
 
 def perform_write(limit_to_write):
     """Wrapper pour l'écriture Modbus."""
+    if limit_to_write == BUGGY_LIMIT_PERMILLE: limit_to_write +=1   # ca ne devrait pas arriver
+    if limit_to_write < MIN_POWER_LIMIT_PERMILLE: limit_to_write = MIN_POWER_LIMIT_PERMILLE # ca ne devrait pas arriver
     status = modbus_controller.write_power_limit(limit_to_write)
     if status == "OK":
         if state.consecutive_modbus_write_errors > 0:

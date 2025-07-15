@@ -196,6 +196,7 @@ les messages d'évenement gérés sont les suivants :
 | `FAST_DROP_THRESHOLDS`| Permet de régler l'algo Fast DROP. Voir commentaires dans le code |
 | `FAST_RISE_ALGORITHM_ENABLE` | Active l'algo Fast RISE |
 | `FAST_RISE_THRESHOLDS` | Permet de régler l'algo Fast RISE. Voir commentaires dans le code |
+| `FAST_COOLDOWN_NB` | Nombre de requetes 'normales' avant de pouvoir enclencher un algo 'FAST'. Objectif : ne pas enchainer des FAST_DROP, FAST_RISE, ... successifs |
 | `MQTT_ENABLE` | 0 : Désactiver l'envoi d'informations MQTT. 1 : MQTT activé, pour tout. 2 : MQTT activé, mais juste pour les évènements|
 | `MQTT_CONN` | Les infos de connexion MQTT. Voir commentaires dans le code |
 | `MQTT_ROOT_TOPIC` | le topic MQTT racine |

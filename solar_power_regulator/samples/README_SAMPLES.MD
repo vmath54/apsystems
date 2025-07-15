@@ -32,7 +32,7 @@ La première réaction du système est d'appliquer l'algo par seuil, avec un pas
    * power_limit reste à 1.0% jusque 16:50:12 ; la production solaire baisse de 1696W à 199W. Il a fallu environ 25 secondes pour y arriver
    * il y a ensuite quelques oscillations pour arriver à une valeur correcte d'injection.
    
-**Globalement, on constate donc un délai d'environ 25s pour que les MO puissent passer d'une production très faible à la production maximale, et inversement.**
+**Globalement, on constate un délai d'une vingtaine de secondes pour que les MO puissent passer d'une production très faible à la production maximale, et inversement.**
    
 ## oscillations
 Sur le graphe principal (16h10-18h10), on constate des oscillations de l'injection par moment.  

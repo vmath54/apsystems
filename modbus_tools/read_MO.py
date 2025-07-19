@@ -24,15 +24,18 @@ from pymodbus.pdu import ExceptionResponse
 
 from pprint import pprint
 
+DEFAULT_MODBUS_IP = "192.168.1.120"
+DEFAULT_MODBUS_PORT = 502
 
 def main():
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("host", type=str, help="Modbus TCP address")
-    argparser.add_argument("-p", "--port", type=int, default = 502, help="Modbus TCP port. default 502")
+    argparser.add_argument("host", type=str, nargs='?', default = DEFAULT_MODBUS_IP, help=f"Modbus TCP address. default {DEFAULT_MODBUS_IP}")
+    argparser.add_argument("-p", "--port", type=int, default = DEFAULT_MODBUS_PORT, help=f"Modbus TCP port. default {DEFAULT_MODBUS_PORT}")
     argparser.add_argument("-u", "--unit", type=int, default=1, help="Modbus device address. default 1")
     args = argparser.parse_args()
 
-    #pprint(list(ModbusTcpClient.DATATYPE)); exit()  # retourne une liste de f"{data}: {data.value}"
+    print(f"Interrogation modbus de {DEFAULT_MODBUS_IP} pour le device {args.unit}")
+    print("-" * 50)    
     
     client: ModbusTcpClient = ModbusTcpClient(
         host=args.host,

@@ -11,6 +11,7 @@ pas optimisé : fait une requete par registre à lire
 syntaxe : 
   read_all_MO.py -h : pour de l'aide
   read_all_MO.py 192.168.1.120 -u 1,11,12 : interrogation de l'ECU a l'adresse IP 192.168.1.120, pour les MO d'ID modbus 1,11,12
+  par défaut : DEFAULT_MODBUS_IP, DEFAULT_MODBUS_PORT, DEFAULT_MODBUS_DEVICES
 """
 
 import argparse
@@ -26,6 +27,10 @@ from pymodbus.exceptions import ModbusException
 from pymodbus.pdu import ExceptionResponse
 
 from pprint import pprint
+
+DEFAULT_MODBUS_IP = "192.168.1.120"
+DEFAULT_MODBUS_PORT = 502
+DEFAULT_MODBUS_DEVICES = "1,11,12"
 
 MOs = []   # liste des MO a interroger
 
@@ -43,9 +48,9 @@ INVERTER_STATUS_MAP = [
 
 def main() -> None:
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("host", type=str, help="Modbus TCP address")
-    argparser.add_argument("-p", "--port", type=int, default = 502, help="Modbus TCP port. default 502")
-    argparser.add_argument("-u", "--units", type=str, default="1", help="List Modbus devices address. default '1'. ex : '1,11,12'")
+    argparser.add_argument("host", type=str, nargs='?', default = DEFAULT_MODBUS_IP, help=f"Modbus TCP address. default {DEFAULT_MODBUS_IP}")
+    argparser.add_argument("-p", "--port", type=int, default = DEFAULT_MODBUS_PORT, help=f"Modbus TCP port. default {DEFAULT_MODBUS_PORT}")
+    argparser.add_argument("-u", "--units", type=str, default = DEFAULT_MODBUS_DEVICES, help=f"List Modbus devices address. default {DEFAULT_MODBUS_DEVICES}")
     args = argparser.parse_args()
     
     liste = ""
@@ -53,7 +58,7 @@ def main() -> None:
         liste += f"{int(item)}, "
         MOs.append({"modbusid": int(item)})
     liste = re.sub(", $", "", liste)
-    print(f"liste des équipements scannes : {liste}")
+    print(f"liste des équipements scannes sur {DEFAULT_MODBUS_IP} : {liste}")
     print()
     
     client: ModbusTcpClient = ModbusTcpClient(

@@ -14,13 +14,18 @@ syntaxe :
     . power_limit : registre 40189. Valeur de 0 à 100, c'est une limitation de puissance relative à la puissance max du MO. 
                     par exemple, pour un DS3 ayant une puissancec max de 880W, un power_limit à 25 limitera la puissance du MO à 220W
                     En realité, il y a un facteur 10 : si -v 25, alors la valeur 250 sera écrite dnas le registre 40189
-                    
+  par défaut, le registre écrit est power_limit                    
+
 A noter : pour ces 3 registres, la modification est globale à l'installation. On spécifie un équipement (unit), mais la valeur écrite est globale                   
 """
 
 import argparse
 from enum import Enum
 from time import sleep
+
+DEFAULT_MODBUS_IP = "192.168.1.120"
+DEFAULT_MODBUS_PORT = 502
+DEFAULT_REGISTER = "power_limit"
 
 # --------------------------------------------------------------------------- #
 # import the various client implementations
@@ -34,11 +39,11 @@ from pprint import pprint
 def main() -> None:
     
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("host", type=str, help="Modbus TCP address")
-    argparser.add_argument("-p", "--port", type=int, default = 502, help="Modbus TCP port. default 502")
+    argparser.add_argument("host", type=str, nargs='?', default = DEFAULT_MODBUS_IP, help=f"Modbus TCP address. default {DEFAULT_MODBUS_IP}")
+    argparser.add_argument("-p", "--port", type=int, default = DEFAULT_MODBUS_PORT, help=f"Modbus TCP port. default {DEFAULT_MODBUS_PORT}")
     argparser.add_argument("-u", "--unit", type=int, default=1, help="Modbus device address. Default = 1")
-    argparser.add_argument("-r", "--register", type=str, required=True, choices=['connected', 'power_limit', 'power_limit_ena'], help="register to write : 'connected', 'power_limit' or 'power_limit_ena'")
-    argparser.add_argument("-v", "--value", type=int, required=True, help="value to write : 0 or 1 for 'connected' or 'power_limit_ena', 0 to 30 for 'power_limit'")
+    argparser.add_argument("-r", "--register", type=str, default = DEFAULT_REGISTER, choices=['connected', 'power_limit', 'power_limit_ena'], help="register to write : 'connected', 'power_limit' or 'power_limit_ena'")
+    argparser.add_argument("-v", "--value", type=int, required=True, help="value to write : 0 or 1 for 'connected' or 'power_limit_ena', 0 to 100 for 'power_limit'")
     args = argparser.parse_args()
     # pprint(list(ModbusTcpClient.DATATYPE)); exit()  # retourne une liste de f"{data}: {data.value}"
     

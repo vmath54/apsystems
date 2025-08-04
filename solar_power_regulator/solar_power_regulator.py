@@ -16,6 +16,7 @@ from collections import deque
 from datetime import datetime
 
 from pymodbus.client import ModbusTcpClient
+from pymodbus.exceptions import ModbusException, ConnectionException
 import paho.mqtt.client as mqtt
 
 # =================================================================================
@@ -80,14 +81,14 @@ CONSECUTIVE_IMPORT_COUNT_FOR_RESET = 15
 FAST_DROP_ALGORITHM_ENABLE = True
 
 # (injection_sup_a, nb_fois_consecutives, si_limite_actuelle_sup_a, delay_next_request)
-FAST_DROP_THRESHOLDS = (30, 2, 500, 10)  # déclenchement si, 2 fois consécutivement, il y a  injection supérieure à 30W 3 et un power_limit > 50.0%. La requete suivante du shelly interviendra dans 10 secondes.
+FAST_DROP_THRESHOLDS = (30, 2, 500, 20)  # déclenchement si, 2 fois consécutivement, il y a  injection supérieure à 30W 3 et un power_limit > 50.0%. La requete suivante du shelly interviendra dans 20 secondes.
 
 # Algorithme pour augmenter rapidement la limite de puissance en cas de forte consommation.
 # Activer l'algorithme "Fast Rise" pour une meilleure réactivité.
 FAST_RISE_ALGORITHM_ENABLE = True
 
 # (injection_inf_a, nb_fois_consecutives, nouvelle_limite, delay_next_request)
-FAST_RISE_THRESHOLDS = (-800, 2, 1000, 10)  # si 2 fois consécutivement, injection inférieure à -1100W (donc importation supérieure à 1100W), on passe power_limit à 100.0% (la valeur 1000). La requete suivante du shelly interviendra dans 10 secondes.
+FAST_RISE_THRESHOLDS = (-800, 2, 1000, 20)  # si 2 fois consécutivement, injection inférieure à -1100W (donc importation supérieure à 1100W), on passe power_limit à 100.0% (la valeur 1000). La requete suivante du shelly interviendra dans 20 secondes.
 
 # le nombre de requetes en régulation par seuil minimum avant de pouvoir appliquer un algo 'FAST', plus violent
 # L'objectif est de ne pas enchainer des FAST_DROP, FAST_RISE, ... successifs
@@ -96,7 +97,7 @@ FAST_COOLDOWN_NB = 5
 
 # --- Gestion des états et Watchdog ---
 # Toutes les 15mn, lecture modbus de power_limit pour contrôle.
-PERIODIC_READ_INTERVAL_S = 900
+PERIODIC_MODBUS_READ_INTERVAL_S = 900
 # Si pas d'infos du shelly depuis 1h, power_limit = 100%.
 WATCHDOG_TIMEOUT_S = 3600
 # Intervalle pour les tâches de fond (tranches horaires, etc.).
@@ -131,7 +132,11 @@ MQTT_EVT_CODE = {
 
 class ReturnCode:
     """Codes de retour standardisés pour les réponses de l'API."""
-    OK = (0, "OK"); DIFFERENT_POWER_LIMIT = (1, "Power-limit value read on device is different from stored value"); MODBUS_FAILURE = (2, "Modbus communication failed"); MODBUS_RECURRENT_FAILURE = (3, "Modbus recurrent communication failure"); OTHER_ERROR = (9, "An other error occurred")
+    OK = (0, "OK")
+    DIFFERENT_POWER_LIMIT = (1, "Power-limit value read on device is different from stored value")
+    MODBUS_FAILURE = (2, "Modbus communication failed")
+    MODBUS_RECURRENT_FAILURE = (3, "Modbus recurrent communication failure")
+    OTHER_ERROR = (9, "An other error occurred")
 
 class RegulationState:
     """Encapsule l'état dynamique de la régulation."""
@@ -161,33 +166,92 @@ class RegulationState:
         return False
 
 class ModbusController:
-    """Gère la communication Modbus avec l'ECU-R."""
+    """Gère une connexion Modbus persistante et thread-safe avec l'ECU-R."""
     def __init__(self, host, port, slave_id):
-        self.host, self.port, self.slave_id, self.lock = host, port, slave_id, RLock()
-    def _execute_transaction(self, action_func):
+        self.host, self.port, self.slave_id = host, port, slave_id
+        self.connect_in_error = False
+        self.first_connect = True
+        self.lock = RLock()
+        self.client = None
+
+    def _connect(self):
+        """Établit la connexion Modbus si elle n'est pas déjà active."""
         with self.lock:
+            if self.client and self.client.is_socket_open():
+                return True
             try:
-                client = ModbusTcpClient(self.host, port=self.port, timeout=10)
-                if not client.connect(): return None, "CONNECTION_ERROR"
-                result = action_func(client)
-                return (result, "OK") if not result.isError() else (None, "MODBUS_EXECUTION_ERROR")
-            except Exception: return None, "COMMUNICATION_ERROR"
-            finally:
-                if 'client' in locals() and client.is_socket_open(): client.close()
+                logging.debug(f"Tentative de connexion Modbus à {self.host}:{self.port}")
+                self.client = ModbusTcpClient(self.host, port=self.port, timeout=10)
+                if self.client.connect():
+                    if self.first_connect:
+                        logging.info("Premiere connexion Modbus établie.")
+                        self.first_connect = False
+                        return True
+                    if self.connect_in_error:
+                        logging.info("END ERROR. Connexion Modbus rétablie.")
+                    else:
+                        logging.debug("Connexion Modbus établie.")
+                    self.connect_in_error = False
+                    return True
+                else:
+                    if not self.connect_in_error:
+                        logging.error("Echec de la connexion Modbus.")
+                        self.connect_in_error = True
+                    self.client = None
+                    return False
+            except Exception as e:
+                logging.error(f"Exception lors de la connexion Modbus: {e}")
+                self.client = None
+                return False
+
+    def disconnect(self):
+        """Ferme la connexion Modbus si elle est active."""
+        with self.lock:
+            if self.client and self.client.is_socket_open():
+                logging.info("Fermeture de la connexion Modbus.")
+                self.client.close()
+            self.client = None
+
+
+# a savoir : l'ECU coupe la connexion modbus si pas de requete pendant environ plus de 5s.
+    def _execute_command(self, action_func, is_retry=False):
+        """Exécute une commande Modbus en gérant la connexion et les erreurs."""
+        with self.lock:
+            if not self._connect():
+                return None, "CONNECTION_ERROR"
+
+            try:
+                result = action_func(self.client)
+                if result.isError():
+                    raise ModbusException(str(result))
+                return result, "OK"
+            except (ModbusException, ConnectionException) as e:
+                logging.debug(f"Erreur de communication Modbus: {e}. Tentative de reconnexion...")
+                self.disconnect() # Force la fermeture avant de réessayer
+                if not is_retry:
+                    return self._execute_command(action_func, is_retry=True)
+                else:
+                    logging.error("Échec de la commande Modbus même après reconnexion.")
+                    return None, "COMMUNICATION_ERROR"
+
     def read_power_limit(self):
         """Lit la valeur brute du registre."""
-        def action(client): return client.read_holding_registers(address=MODBUS_POWER_LIMIT_REGISTER, count=1, slave=self.slave_id)
-        result, status = self._execute_transaction(action)
+        def action(client):
+            return client.read_holding_registers(address=MODBUS_POWER_LIMIT_REGISTER, count=1, slave=self.slave_id)
+        result, status = self._execute_command(action)
         return (result.registers[0], status) if status == "OK" else (None, status)
+
     def write_power_limit(self, value_permille):
         """Ecrit la valeur brute dans le registre."""
-        def action(client): return client.write_registers(address=MODBUS_POWER_LIMIT_REGISTER, values=[value_permille], slave=self.slave_id)
-        _, status = self._execute_transaction(action)
+        def action(client):
+            return client.write_registers(address=MODBUS_POWER_LIMIT_REGISTER, values=[value_permille], slave=self.slave_id)
+        _, status = self._execute_command(action)
         return status
 
 class MQTTController:
     """Gère la connexion et la publication des messages MQTT."""
     def __init__(self):
+        # self.client = None; self.is_connected = False; self.lock = RLock()
         self.client = None; self.is_connected = False; self.lock = RLock()
     def _connect(self):
         with self.lock:
@@ -272,7 +336,7 @@ class RequestHandler(QuietRequestHandler):
             logging.debug(log_msg)
 
             if MQTT_ENABLE == 1:
-                run_payload = {"solar": solar_power, "injection": injection_power, "power_limit": new_limit / 10.0, "delay": next_interval}
+                run_payload = {"solar": solar_power, "injection": injection_power, "house_power": solar_power - injection_power, "power_limit": new_limit / 10.0, "delay": next_interval}
                 if json.dumps(run_payload) != state.last_run_payload:
                     mqtt_controller.publish("run", run_payload); state.last_run_payload = json.dumps(run_payload)
             if new_limit != state.current_power_limit_permille:
@@ -291,12 +355,6 @@ class RequestHandler(QuietRequestHandler):
     def send_response_and_exit(self, return_code_tuple, limit, increment, interval):
         response_payload = { "return_code": return_code_tuple[0], "message": return_code_tuple[1], "power_limit_value": limit, "power_limit_increment": increment, "sensor_read_interval": interval, }
         self.send_json_response(200, response_payload)
-
-# --- Fonctions de service ---
-state = RegulationState()
-state_lock = RLock()
-modbus_controller = None
-mqtt_controller = MQTTController()
 
 def handle_state_and_reads():
     """Effectue une lecture Modbus et met à jour l'état."""
@@ -400,8 +458,8 @@ def calculate_new_limit(injection_power, solar_power):
 
 def perform_write(limit_to_write):
     """Wrapper pour l'écriture Modbus."""
-    if limit_to_write == BUGGY_LIMIT_PERMILLE: limit_to_write +=1   # ca ne devrait pas arriver
-    if limit_to_write < MIN_POWER_LIMIT_PERMILLE: limit_to_write = MIN_POWER_LIMIT_PERMILLE # ca ne devrait pas arriver
+    if limit_to_write == BUGGY_LIMIT_PERMILLE: limit_to_write +=1
+    if limit_to_write < MIN_POWER_LIMIT_PERMILLE: limit_to_write = MIN_POWER_LIMIT_PERMILLE
     status = modbus_controller.write_power_limit(limit_to_write)
     if status == "OK":
         if state.consecutive_modbus_write_errors > 0:
@@ -434,7 +492,8 @@ def setup_logging(args):
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
     
-    logging.getLogger("pymodbus").setLevel(logging.WARNING)
+    # logging.getLogger("pymodbus").setLevel(logging.WARNING)
+    logging.getLogger("pymodbus").setLevel(logging.CRITICAL)   # VM
     
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     syslog_formatter = logging.Formatter('solar_regulator[%(process)d]: %(levelname)s %(message)s')
@@ -480,17 +539,24 @@ def handle_periodic_tasks():
             logging.info(f"Changement de tranche horaire. {in_out_str} régulation. Passage à 100%.")
             mqtt_controller.publish("evt", {"code": evt_code, "msg": MQTT_EVT_CODE[evt_code]})
             perform_write(MAX_POWER_LIMIT_PERMILLE)
+            # --- Déconnexion Modbus hors de la tranche ---
+            if not is_currently_in_window and modbus_controller:
+                modbus_controller.disconnect()
             state.was_in_regulation_window = is_currently_in_window
 
-        if is_currently_in_window and time.time() - state.last_modbus_read_time > PERIODIC_READ_INTERVAL_S:
-            logging.info("Lecture périodique du power_limit...")
-            handle_state_and_reads()
+        if is_currently_in_window and time.time() - state.last_modbus_read_time > PERIODIC_MODBUS_READ_INTERVAL_S:
+            return_code_tuple, power_limit = handle_state_and_reads()
+            if return_code_tuple in [ReturnCode.OK]:
+                logging.info(f"Lecture périodique du power_limit. Valeur lue : {power_limit/10.0:.1f}%")
+            else:
+                logging.info(f"Lecture périodique du power_limit échouée")
+
 
 def watchdog_thread():
     """Surveille la communication avec le Shelly et réagit en cas de silence prolongé."""
     while True:
         with state_lock:
-            if not state.watchdog_triggered and (time.time() - state.last_shelly_request_time > WATCHDOG_TIMEOUT_S):
+            if not state.watchdog_triggered and state.is_in_regulation_window() and (time.time() - state.last_shelly_request_time > WATCHDOG_TIMEOUT_S):
                 logging.warning(f"WATCHDOG: Aucune requête du Shelly depuis {WATCHDOG_TIMEOUT_S}s. Production à 100%.")
                 if modbus_controller:
                     perform_write(MAX_POWER_LIMIT_PERMILLE)
@@ -527,6 +593,12 @@ def main():
         mqtt_controller.client.loop_stop()
         mqtt_controller.client.disconnect()
     logging.info("Démon arrêté.")
+
+# --- Fonctions de service ---
+state = RegulationState()
+state_lock = RLock()
+modbus_controller = None
+mqtt_controller = MQTTController()
 
 if __name__ == "__main__":
     main()

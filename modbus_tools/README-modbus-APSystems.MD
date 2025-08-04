@@ -79,8 +79,10 @@ Concernant le paramètre `Conn` (essais ultérieurs) :
   Chez moi, pour le DS3 ayant un firmware plus ancien, il faut environ 2mn. Pour les autres le démarrage se produit au bout d'environ 6 mn
 - chose étrange (qui diffère du paramètre `power_limit_ena`) : lorsque `Conn` = 0, si on modifie le registre `power_limit`, les MO vont redémarrer et atteindre la puissance max fixée par la valeur de `power_limit` lue
 
-## A noter
-Je n'ai pas fait d'essais de coupure électrique des MO en cours de journée : je pense que ca coupe le relai électrique interne au MO qui le lie au réseau, et je soupconne qu'il vaut mieux éviter de jouer avec lorsque la production est active
+## Connexion modbus persistante
+J'ai fait des essais en maintenant persistante la connexion modbus lors de requêtes successives.
+- si les requêtes se succèdent rapidement ; par exemple, 5 secondes entre chaque requête, ou moins : la connexion reste établie, on peut la maintenir ainsi très longtemps.
+- dès que la fréquence des requetes diminuent ; par exemple 10 secondes entre chaque requête, il y a très rapidement rupture de la connexion TCP/modbus de la part de l'ECU. Avec une fréquence de 10 secondes, de 1 à 4 requêtes peuvent passer ; ensuite la connexion est rompue coté ECU.
 
 ## Conseil 
 Si vous souhaitez pouvoir moduler la puissance de production de votre installation en modbus, l'intervention sur `power_limit` suffit : on peut faire varier celui-ci de 1% à 100%, il n'y a donc pas besoin d'intervenir sur le `registre power_limit_ena`, qui apporte un niveau de complexité supplémentaire.

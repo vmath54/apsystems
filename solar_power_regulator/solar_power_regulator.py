@@ -310,7 +310,7 @@ class RequestHandler(QuietRequestHandler):
         with state_lock:
             state.last_shelly_request_time = time.time()
             if state.watchdog_triggered:
-                logging.warning("Communication avec le Shelly rétablie.")
+                logging.info("Communication avec le Shelly rétablie.")
                 state.watchdog_triggered = False
 
             return_code_tuple = ReturnCode.OK

@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# permet de lire et d'enregistrer les messages MQTT des topics solar_power_regulator/run et solar_power_regulator/run
+# ces messages speuvent être envoyés par 
+#  . le démon solar_power_regulator.py en fonctionnement normal
+#  . le script shelly MQTT_speed.js pour faire des tests 
+# il enregistre les messages dans solar_power_regulator_run.csv et solar_power_regulator_evt.csv
+
 import argparse
 import logging
 import json
@@ -16,8 +22,7 @@ import paho.mqtt.client as mqtt
 # --- Paramètres de connexion MQTT par défaut ---
 # (IP/hostname, port, user, password, 1 si SSL/TLS sinon 0)
 # Le user et le password peuvent être surchargés par les arguments de la ligne de commande.
-#MQTT_CONN = ("localhost", 1883, "user", "password", 0)
-MQTT_CONN = ("192.168.1.147", 1883, "mqtt_VM", "domotique_VM", 0)
+MQTT_CONN = ("localhost", 1883, "user", "password", 0)
 
 # --- Topic MQTT racine ---
 MQTT_ROOT_TOPIC = "solar_power_regulator"
@@ -53,7 +58,7 @@ def on_message(client, userdata, msg):
     """Callback exécuté à la réception d'un message."""
     try:
         payload = json.loads(msg.payload.decode('utf-8'))
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
 
         # Traitement du topic /run
         if msg.topic == f"{MQTT_ROOT_TOPIC}/run":
@@ -81,6 +86,7 @@ def on_message(client, userdata, msg):
                     payload.get('msg', '')
                 ]
                 write_csv_row(userdata['file_evt'], row)
+                #write_csv_row(userdata['file_infos'], row)
 
     except (json.JSONDecodeError, KeyError) as e:
         logging.error(f"Erreur lors du traitement du message MQTT: {e}")

@@ -353,7 +353,7 @@ class RequestHandler(QuietRequestHandler):
         self.wfile.write(json.dumps(data).encode('utf-8'))
 
     def send_response_and_exit(self, return_code_tuple, limit, increment, interval):
-        response_payload = { "return_code": return_code_tuple[0], "message": return_code_tuple[1], "power_limit_value": limit, "power_limit_increment": increment, "sensor_read_interval": interval, }
+        response_payload = { "return_code": return_code_tuple[0], "message": return_code_tuple[1], "power_limit_value": f"{limit / 10.0:.1f}", "power_limit_increment": f"{increment / 10.0:.1f}", "sensor_read_interval": interval, }
         self.send_json_response(200, response_payload)
 
 def handle_state_and_reads():
@@ -583,7 +583,10 @@ def main():
         sys.exit(1)
 
     def shutdown_handler(signum, frame):
-        logging.info("Signal d'arrêt reçu..."); Thread(target=httpd.shutdown).start()
+        logging.info("Signal d'arrêt reçu... Passage de power_limit à 100% avant arrêt")
+        perform_write(1000)
+        Thread(target=httpd.shutdown).start()
+        
     signal.signal(signal.SIGTERM, shutdown_handler); signal.signal(signal.SIGINT, shutdown_handler)
 
     logging.info(f"Démon démarré sur http://{args.http_host}:{args.http_port}")

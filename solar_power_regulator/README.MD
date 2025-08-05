@@ -280,13 +280,12 @@ Mon système utilise rsyslog pour la système de log, comme la plupart des syst�
 On va créer le fichier /etc/rsyslog.d/solar_power_regulator.conf comme indiqué, puis redémarrer rsyslog :
 ```bash
 sudo  cat /etc/rsyslog.d/solar_power_regulator.conf
-if $programname == "solar_regulator" then {
+if $programname == 'solar_regulator' then {
 #    if prifilt("*.debug") then {
     if prifilt("*.info") then {
-      action(type="omfile" file="/var/log/solar_regulator.log")
+        action(type="omfile" file="/var/log/solar.log")
     }
-  }
-  stop
+    stop
 }
 
 sudo service rsyslog restart

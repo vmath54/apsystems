@@ -403,7 +403,7 @@ def calculate_new_limit(injection_power, solar_power):
 
         if state.consecutive_deep_import_count >= rise_count and state.fast_cooldown == 0:
             if last_limit < rise_limit:
-                logging.info(f"FAST RISE: Importation forte détectée. Passage de {last_limit/10.0:.1f}% à {rise_limit/10.0:.1f}%.")
+                logging.info(f"FAST RISE: Importation forte détectée : {injection_power} (solaire {solar_power}). Ajustement de {last_limit/10.0:.1f}% à {rise_limit/10.0:.1f}%.")
                 state.fast_cooldown = FAST_COOLDOWN_NB
                 state.consecutive_deep_import_count = 0
                 mqtt_controller.publish("evt", {"code": 8, "msg": f"{MQTT_EVT_CODE[8]}. De {last_limit/10.0:.1f}% à {rise_limit/10.0:.1f}%. Solar={solar_power}W, Injection={injection_power}W"})
@@ -420,7 +420,7 @@ def calculate_new_limit(injection_power, solar_power):
         if (state.consecutive_high_injection_count >= drop_count and last_limit > drop_limit_thresh and solar_power > 0 and state.fast_cooldown == 0):
             estimated_limit = int(((solar_power - injection_power) / TOTAL_RATED_SOLAR_POWER) * 1000)
             if estimated_limit < last_limit:
-                logging.info(f"FAST DROP: Injection haute détectée. Ajustement rapide de {last_limit/10.0:.1f}% à {estimated_limit/10.0:.1f}%.")
+                logging.info(f"FAST DROP: Injection haute détectée : {injection_power} (solaire {solar_power}). Ajustement de {last_limit/10.0:.1f}% à {estimated_limit/10.0:.1f}%.")
                 new_limit = estimated_limit
                 state.fast_cooldown = FAST_COOLDOWN_NB
                 state.consecutive_high_injection_count = 0

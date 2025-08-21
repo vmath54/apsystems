@@ -1,0 +1,95 @@
+############ resultats d'une campagne de mesures speedtest en modbus ############
+
+Requetes faites à l'aide du script write_maxlimit_Modbus.py : écriture du registre 40189 (power_limit : en millième de la puissance maxi du MO)
+
+Mesures faites avec des DS3 880W : 1 coté Est, et 2 coté Ouest
+Vers 14h : le MO Est a à peu près le même ensoleillement que les MOs coté Ouest. Les MOs produisent alors au maximum environ 70% de leur capacité.
+
+############ temps de réponse moyen d'une requete modbus ############
+155ms 156ms 173ms 152ms 160ms 162ms 144ms 178ms 239ms 252ms 242ms 241ms 159ms 182ms ...
+
+Donc, stable vers 165ms, avec des pointes à 240ms
+
+entre le moment de l'écriture modbus et le début de réaction, il se passe environ 2s
+
+A noter des décrochages de certains MO (toujours les mêmes) se sont produit ; toujours lors d'une réduction forte du power_limit
+
+############ temps de réaction des MO à une requete modbus ############
+Le départ de la mesure correspond au lancement de la requete modbus
+ 
+modbus_pas_high_40.csv
+----------------------
+passage de 90% (792W)  à 4% (35W)
+  !!! lors de la mesure, un seul MO est actif. à 660W (donc à 75% de capacité) !!!
+  passage de 660W à 36W en 39,4s
+passage de 4% à 90%
+  de 34W à 656W en 20.8s
+passage de 90% à 50% (440W)
+  de 660W à 465W en 15.8s
+passage de 50% à 10% (88W)
+  de 462W à 90W en 21.2s
+  !!! les 3 MOs sont à nouveau actifs !!!
+passage de 10% à 50%
+  de 262W (87W) à 1345W (448W) en 14.4s
+passage de 50% à 90%
+  de 1352W (451W) à 1830W (610W - 69%) en 13.6s
+  
+modbus_pas_20_10.csv
+--------------------
+passage de 90% (792W) à 50% (440W)
+  de 1837W (612W - 69.6%) à 1355W (452W) en 14.4s
+passage de 50% à 30% (264W)
+  de 1353W (451W) à 284W (!!! 2 MOs ont décroché ; pas de mesure correcte !!!)
+passage de 30% à 10% (88W)
+  de 285W à 101W en 14.6s
+passage de 10% à 30%
+  de 100W à 286W en 8.8s
+passage de 30% à 50%
+  de 285W à 473W en 7.9s
+passage de 50% à 30%
+  de 475W 289W en 9.5s
+passage de 30% à 20% (176W)
+  de 285W à 192W en 6s
+  !!! à nouveau 3 MOs en service !!!
+passage de 20% à 10% (88W)
+  de 534W (178W) à 265W (88W) en 9.7s
+passage de 10% à 20%
+  de 268W (89W) à 526W (175W) en 10.8s
+passage de 20% à 30%
+  de 532W (177W) à 798W (266W) en 7.7s
+  
+modbus_pas_5.csv
+----------------
+passage de 90% (792W) à 20% (176W)
+  de 1836W (612W - 69.5%) à 192W (!!! 2 MOs ont décroché ; pas de mesure correcte !!!)
+passage de 20% à 15% (132W)
+  de 194W à 148W en 6.6s
+passage de 15% à 10% (88W)
+  de 149W à 101W en 11.7s (7.7s avant début de réaction)
+passage de 10% à 15%
+  de 100W à 149W en 5.6s (4.5s avant début de réaction)
+passage de 15% à 20%
+  de 147W à 198W en 2.8s
+
+modbus_pas_2_1.csv
+------------------
+passage de ??% à 20% (176W)
+  de 1542W (514W - 58%) à 370W (185W) (!!! 1 MO a décroché ; pas de mesure correcte !!!)
+passage de 20% à 18% (158W)
+  de 369W (185W) à 330W (165W) en 5.4s
+passage de 18% à 16% (141W)
+  de 331W (165W) à 293W (146W) en 6.8s
+passage de 16% à 18%
+  de 294W (147W) à 321W (160W) en 5.9s
+passage de 18% à 20%
+  de 320W (160W) à 358W (179W) en 6.4s
+passage de 20% à 19% (167W)  
+  de 358W (179W) à 347W (173W) en 6.4s
+passage de 19% à 18%
+  de 346W (173W) à 332W (166W) en 3.5s
+passage de 18% à 19%
+  de 330W (165W) à 338W (169W) en 7.1s
+passage de 19% à 20%
+  de 340W (170W) à 360W (180W) en 4.4s
+passage de 20% à 100%
+  de 360W à 1498W (749W - 85%) en 19.8s

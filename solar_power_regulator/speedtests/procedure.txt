@@ -1,0 +1,136 @@
+Procédure pour réaliser une mesure speedtest 
+############################################
+rappel
+------
+3 MO DS3 = 3 x 880 = 2640W
+Coté modbus : 
+  . 1% = 2.64W
+  . 4.5% = 119W
+  
+Coté menus ECU : 
+  . max = 440 -> 2640W
+  . min = 20 -> 120W
+
+préalable :
+-----------
+- dans jeedom, désactiver l'équipement solar_regulator dans le plugin MQTT
+- arrêter le service solar sur la box jeedom
+- arrêter le script shelly MQTT_send_infos
+
+ouvrir des fenetres CMD
+-----------------------
+- dans E:\temp\solaire\VM : pour le script read_all_MO.py
+- dans E:\temp\solaire\solar_power_regulator pour le script solar_read_mqtt.py
+- dans E:\temp\solaire\solar_power_regulator\speedtests : pour les scripts write_maxlimit_Modbus.py et write_maxpower_HTTP.py
+ 
+### début des tests ###
+
+Dans jeedom, plugin MQTT : désactiver le device solar_regulator
+Coté shelly : désactiver les script MQTT_send_infos.js  et solar_power_regulator.js.
+              exécuter le script MQTT_speedtest.js : ca envoie toutes les 0.5s les infos du shelly
+
+tests modbus
+------------
+rappel : puissance max des MO : 2640W
+read_all_MO.py ; noter la puissance de chaque MO
+solar_read_mqtt.py -v
+
+### hight ###
+write_maxlimit_Modbus.py -pl 90 // 792W . 2376W
+write_maxlimit_Modbus.py -pl 4  // 35W  . 106W
+write_maxlimit_Modbus.py -pl 90 // 792W . 2376W
+### pas de 40% ###
+write_maxlimit_Modbus.py -pl 90 // 792W . 2376W
+write_maxlimit_Modbus.py -pl 50 // 440W . 1320W
+write_maxlimit_Modbus.py -pl 10 // 88W  . 264W
+write_maxlimit_Modbus.py -pl 50 // 440W . 1320W
+write_maxlimit_Modbus.py -pl 90 // 792W . 2376W
+### pas de 20% ###
+write_maxlimit_Modbus.py -pl 50 // 440W . 1320W
+write_maxlimit_Modbus.py -pl 30 // 264W . 792W
+write_maxlimit_Modbus.py -pl 10 // 88W  . 264W
+write_maxlimit_Modbus.py -pl 30 // 264W . 792W
+write_maxlimit_Modbus.py -pl 50 // 440W . 1320W
+### pas de 10% ###
+write_maxlimit_Modbus.py -pl 30 // 264W . 792W
+write_maxlimit_Modbus.py -pl 20 // 176W . 528W
+write_maxlimit_Modbus.py -pl 10 // 88W  . 264W
+write_maxlimit_Modbus.py -pl 20 // 176W . 528W
+write_maxlimit_Modbus.py -pl 30 // 264W . 792W
+### pas de 5% ###
+write_maxlimit_Modbus.py -pl 20 // 176W . 528W
+write_maxlimit_Modbus.py -pl 15 // 132W . 396W
+write_maxlimit_Modbus.py -pl 10 // 88W  . 264W
+write_maxlimit_Modbus.py -pl 15 // 132W . 396W
+write_maxlimit_Modbus.py -pl 20 // 176W . 528W
+### pas de 2% ###
+write_maxlimit_Modbus.py -pl 20 // 176W . 528W
+write_maxlimit_Modbus.py -pl 18 // 158W . 475W
+write_maxlimit_Modbus.py -pl 16 // 141W . 422W
+write_maxlimit_Modbus.py -pl 18 // 158W . 475W
+write_maxlimit_Modbus.py -pl 20 // 176W . 528W
+### pas de 1% ###
+write_maxlimit_Modbus.py -pl 20 // 176W . 528W
+write_maxlimit_Modbus.py -pl 19 // 167W . 502W
+write_maxlimit_Modbus.py -pl 18 // 158W . 475W
+write_maxlimit_Modbus.py -pl 19 // 167W . 502W
+write_maxlimit_Modbus.py -pl 20 // 176W . 528W
+
+write_maxlimit_Modbus.py -pl 100
+
+arreter solar_read_mqtt.py
+renommer les fichiers solar_power_regulator_run.csv et solar_power_regulator_evt.csv
+
+tests http
+----------
+read_all_MO.py ; noter la puissance de chaque MO
+solar_read_mqtt.py -v
+### totale ####
+write_maxpower_HTTP.py -mp 396 //  90% - 792W . 2376W
+write_maxpower_HTTP.py -mp 20  // 4.5% - 40W  . 120W
+write_maxpower_HTTP.py -mp 396 //  90% - 792W . 2376W
+### pas de 40% ###
+write_maxpower_HTTP.py -mp 396 // 90% - 792W . 2376W
+write_maxpower_HTTP.py -mp 220 // 50% - 440W . 1320W
+write_maxpower_HTTP.py -mp 44  // 10% - 88W  . 264W
+write_maxpower_HTTP.py -mp 220 // 50% - 440W . 1320W
+write_maxpower_HTTP.py -mp 396 // 90% - 792W . 2376W
+### pas de 20% ###
+write_maxpower_HTTP.py -mp 220 // 50% - 440W . 1320W
+write_maxpower_HTTP.py -mp 132 // 30% - 264W . 792W
+write_maxpower_HTTP.py -mp 44  // 10% - 88W  . 264W
+write_maxpower_HTTP.py -mp 132 // 30% - 264W . 792W
+write_maxpower_HTTP.py -mp 220 // 50% - 440W . 1320W
+### pas de 10% ###
+write_maxpower_HTTP.py -mp 132 // 30% - 264W . 792W
+write_maxpower_HTTP.py -mp 88  // 20% - 176W . 528W
+write_maxpower_HTTP.py -mp 44  // 10% - 88W  . 264W
+write_maxpower_HTTP.py -mp 88  // 20% - 176W . 528W
+write_maxpower_HTTP.py -mp 132 // 30% - 264W . 792W
+### pas de 5% ###
+write_maxpower_HTTP.py -mp 88  // 20% - 176W . 528W
+write_maxpower_HTTP.py -mp 66  // 15% - 132W . 396W
+write_maxpower_HTTP.py -mp 44  // 10% - 88W  . 264W
+write_maxpower_HTTP.py -mp 66  // 15% - 132W . 396W
+write_maxpower_HTTP.py -mp 88  // 20% - 176W . 528W
+### pas de 2% ###
+write_maxpower_HTTP.py -mp 88  // 20% - 176W . 528W
+write_maxpower_HTTP.py -mp 79  // 18% - 158W . 474W
+write_maxpower_HTTP.py -mp 70  // 16% - 32W  . 420W
+write_maxpower_HTTP.py -mp 79  // 18% - 158W . 474W
+write_maxpower_HTTP.py -mp 88  // 20% - 176W . 528W
+### pas de 1% ###
+write_maxpower_HTTP.py -mp 88  // 20% - 176W . 528W
+write_maxpower_HTTP.py -mp 84  // 19% - 168W . 504W
+write_maxpower_HTTP.py -mp 79  // 18% - 158W . 474W
+write_maxpower_HTTP.py -mp 84  // 19% - 168W . 504W
+write_maxpower_HTTP.py -mp 88  // 20% - 176W . 528W
+
+arreter solar_read_mqtt.py
+renommer les fichiers solar_power_regulator_run.csv et solar_power_regulator_evt.csv
+
+###############################################
+arreter le script shelly MQTT_speedtest.js
+relancer le script shelly MQTT_send_infos.py
+
+Dans jeedom, plugin MQTT : ré-activer le device solar_regulator

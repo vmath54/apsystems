@@ -1,0 +1,97 @@
+############ resultats d'une campagne de mesures speedtest en http ############
+
+Ce sont des requetes faites vers l'URL http://<adresse_IP>/index.php/configuration/set_maxpower à l'aide du script write_maxpower_HTTP.py
+La valeur écrite correspond à la puissance maximum acceptée par le MO en provenance d'UN panneau solaire
+
+Les requetes http sont lancées en parallèle (threads) vers 3 MOs DS3 880W : 1 coté Est, et 2 coté Ouest
+Vers 14h : le MO Est a à peu près le même ensoleillement que les MOs coté Ouest. Les MOs produisent alors au maximum environ 70% de leur capacité.
+
+############ temps de réponse moyen d'une requete http ############
+5120ms 5047ms 5698ms 5095ms 5255ms 5115ms 5076ms
+
+Donc stable, légèrement au dessus de 5 secondes
+
+entre le moment de l'écriture http et le début de réaction, il se passe en général plus de 10 secondes.
+9828 10394 11336 11763 11698 12023 9355 8733 11420 12007 10537 10831 9515
+
+A noter des décrochages de certains MO (toujours les mêmes) se sont produit ; toujours lors d'une réduction forte de la puissance max
+
+############ temps de réaction des MO aux requetes http ############
+Le départ de la mesure correspond au lancement des requetes http 
+
+HTTP_pas_high_40.csv
+--------------------
+passage de 396W (90%) à 20W (2.3%)
+  de 1844W (615W - 70%) à 48W (!!! 2 MOs ont décroché ; pas de mesure correcte !!!)
+passage de 20W à 396W
+  de 48W à 682W (77%) en 25.2s
+passage de 396W (90%) à 220W (50%)
+  de 681W (77%) à 441W (50%) en 24.9s
+passage de 220W (50%) à 44W (10%)
+  de 440W (50%) à 92W (10.5%) en 28.8s
+passage de 44W (10%) à 220W (50%)
+  de 92W (10.5%) à 440W (50%) en 20.7s
+  !!! les 3 MOs sont à nouveau actifs !!!
+passage de 220W (50%) à 396W (90%)
+  de 1252W (417W - 47%) à 1823W (608W - 69%) en 20.9s
+  
+HTTP_pas_20_10.csv
+------------------
+passage de 396W (90%) à 220W (50%)
+  de 1841W (614W - 70%) à 1256W (419W - 48%) en 23.4s
+passage de 220W (50%) à 132W (30%)
+  de 1255W (419 - 48%) à 666W (222W - 25%) en 13.8s
+  !!! 2 MOs on décroché !!!
+passage de 132W (30%) à 44W (10%)
+  de 265W (30%) à 90W (10%) en 24.4s
+passage de 44W (10%) à 132W (30%)  
+  de 91W (10%) à 266W (30%) en 17s
+passage de 132W (30%) à 220W (50%)
+  de 266W (30%) à 440W (50%) en 14.5s
+  
+HTTP_pas_10_5.csv
+-----------------
+passage de ???W à 132W (30%)  (!!! passé de 1 à 3 MOs actifs ; pas de mesure correcte !!!)
+
+passage de 132W (30%) à 88W (20%)
+  de 746W (249W - 28%) à 496W (165W - 19%) en 16.1s
+passage de 88W (20%) à 44W (10%)
+  de 494W (165W - 19%) à 225W (75W - 8.5%) en 32.1s
+passage de 44W (10%) à 88W (20%)
+  de 224W (75W - 8.5%) à 488W (162W - 18.5%) en 25.8s
+passage de 88W (20%) à 132W (30%)
+  de 490W (163W - 18.6%) à 729W (243W - 28%) en 23.5s
+passage de 132W (30%) à 88W (20%)
+  de 734W (245W, 28%) à 495W (165W - 19%) en 15.4s
+passage de 88W (20%) à 66W (15%)
+  de 495W (165W - 19%) à 370W (123W - 14%) en 18.1s
+passage de 66W (15%) à 44W (10%)
+  de 370W (123W - 14%) à 245W (82W - 9%) en 19.7s
+passage de 44W (10%) à 66W (15%)
+  de 245W (82W - 9%) à 363W (121W - 14%) en 11.8s
+passage de 66W (15%) à 88W (20%)
+  de 363W (121W - 14%) à 442W (147W - 17%) en 12s
+  
+HTTP_pas_2_1.csv
+----------------
+passage de 396W (90%) à 88W (20%)
+  de 1590W à 340W (170W - 19%) (!!! 1 MO a décroché. Il reste 2 MOs actifs ; pas de mesure correcte !!!)
+passage de 88W (20%) à 79W (18%)
+  de 340W (170W - 19%) à 305W (152W - 17%) en 17s
+passage de 79W (18%) à 70W (16%)
+  de 305W (152W - 17%) à 288W (144W - 16%) en 10s
+passage de 70W (16%) à 79W (18%)
+  de 266W (133W - 15%) à 308W (154W - 17.5%) en 10.4s
+passage de 79W (18%) à 88W (20%)
+  de 306W (153W - 17%) à 340W (170W - 19%) en 25.6s
+passage de 88W (20%) à 84W (19%)
+  de 340W (170W - 19%) à 327W (163W - 18.6%) en 10s
+passage de 84W (19%) à 79W (18%)
+  de 326W (163W - 18.6%) à 307W (153W - 17.4%) en 11.9s
+passage de 79W (18%) à 84W (19%)
+  de 307W (153W - 17.4%) à 490W (163W - 18.6%) (!!! le 3eme MO a raccroché. Les  3 MOs sont actifs ; pas de mesure correcte !!!)
+
+
+  
+
+

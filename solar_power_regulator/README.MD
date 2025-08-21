@@ -321,6 +321,11 @@ C'est un programme python qui se connecte à un serveur MQTT et qui s'abonne aux
 Il peut écrire des fichiers .csv contenant les informations recueillies. On peut ensuite analyser ces informations à l'aide d'un tableur.  
 Il écrit en stdout les messages lus dans le topic `evt` ; optionnellement, il peut également écrire en stdout les messages lus dans le topic `run`.
 
+## solar_read_mqtt.xlsm
+
+C'est une feuille de calcul excel, qui permet de simplifier l'importation dans excel d'un fichier csv écrit par solar_read_mqtt.py (par exemple, solar_power_regulator_run.csv).  
+Il ajoute en plus une colonne 'delta_ms' qui indique la différence en milli secondes avec l'enregistrement précédent.
+
 
 # Annexe 3. Particularités du fonctionnement modbus APSystems relative à la modulation de production
 

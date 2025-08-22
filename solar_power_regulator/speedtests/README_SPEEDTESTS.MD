@@ -32,6 +32,35 @@ C'est une mesure de temps prise juste avant la requete et juste après.
 * requete modbus : durée stable, environ 165ms
 * requetes http : durée stable, un peu au dessus de 5s.
 
+**Précision relative à la durée des requetes http :**  
+Si on sérialise les requetes http, chacune dure environ 2.3s :
+```
+Exécution des requêtes HTTP en mode SÉQUENTIEL...
+requete HTTP pour 704000162664. début : 0.00s, fin : 2.33s, durée :  2.33s.
+requete HTTP pour 704000585573. début : 2.33s, fin : 4.61s, durée :  2.27s.
+requete HTTP pour 704000587038. début : 4.61s, fin : 6.98s, durée :  2.37s.
+...
+Opération terminée en 6.99 secondes.
+```
+Si on parallélise les requêtes (theads python), on pourrait imaginer que la durée totale serait à peu près celle d'une requête http ; c'est vrai avec 2 requêtes en parallèle :
+```
+Exécution des requêtes HTTP en mode PARALLÈLE...
+requete HTTP pour 704000162664. début : 0.01s, fin : 2.74s, durée :  2.73s.
+requete HTTP pour 704000585573. début : 0.02s, fin : 2.81s, durée :  2.79s.
+...
+Opération terminée en 2.82 secondes.
+```
+Mais pas avec 3 requêtes en parallèle :
+```
+Exécution des requêtes HTTP en mode PARALLÈLE...
+requete HTTP pour 704000162664. début : 0.01s, fin : 2.76s, durée :  2.75s.
+requete HTTP pour 704000585573. début : 0.01s, fin : 2.81s, durée :  2.79s.
+requete HTTP pour 704000587038. début : 0.02s, fin : 5.05s, durée :  5.03s.
+Opération terminée en 5.06 secondes.
+```
+Systématiquement, l'exécution http pour **deux** Mos dure environ 2.75s ; mais pour le troisième (pas toujours le même), l'exécution dure environ 5s.  
+Une explication possible : l'ECU n'est peut-être capable de traiter que 2 requêtes en parallème ; la troisième reste en attente.
+
 ## début de réaction des MOs suite à une requete
 C'est une mesure de temps prise juste avant la requete, jusqu'au début de réaction mesurée.
 * requete modbus : en moyenne 2s

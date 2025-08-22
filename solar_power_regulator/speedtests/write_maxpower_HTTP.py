@@ -35,6 +35,8 @@ HTTP_TIMEOUT = 10
 # --- FIN DE LA SECTION DE CONFIGURATION ---
 # =============================================================================
 
+global_start_time = 0
+
 def setup_arg_parser():
     """
     Configure et parse les arguments de la ligne de commande.
@@ -143,13 +145,14 @@ def run_serial_requests(maxpower):
         payload = {'id': device_id, 'maxpower': maxpower}
         start_time_h = time.time()
         try:
-            print(f"  -> Envoi de la requête pour le device {device_id}...")
+            # print(f"  -> Envoi de la requête pour le device {device_id}...")
             response = requests.post(HTTP_URL, data=payload, headers=headers, timeout=HTTP_TIMEOUT)
             response.raise_for_status()  # Lève une exception pour les codes d'erreur HTTP (4xx ou 5xx)
             
             end_time_h = time.time()
+            print(f"requete HTTP pour {device_id}. début : {start_time_h - global_start_time:.2f}s, fin : {end_time_h - global_start_time:.2f}s, durée :  {end_time_h - start_time_h:.2f}s.")
             response_json = response.json()
-            print(f"response_json = {response_json}")
+            # print(f"   {response_json}")
             if response_json.get("value") != 0:
                 handle_http_error(device_id, maxpower, response_json)
 
@@ -159,10 +162,7 @@ def run_serial_requests(maxpower):
         except json.JSONDecodeError:
             print(f"Erreur critique: La réponse du serveur pour {device_id} n'est pas un JSON valide.", file=sys.stderr)
             sys.exit(1)
-            
-        end_time_h = time.time()
-        print(f"durée totale requete HTTP pour {device_id} : {end_time_h - start_time_h:.2f} secondes.")
-    
+                
     print("Toutes les requêtes séquentielles ont réussi.")
 
 async def send_parallel_request(session, device_id, maxpower):
@@ -171,13 +171,17 @@ async def send_parallel_request(session, device_id, maxpower):
     """
     payload = {'id': device_id, 'maxpower': maxpower}
     headers = {'X-Requested-With': 'XMLHttpRequest'}
-    print(f"  -> Préparation de la requête pour le device {device_id}...")
+    # print(f"  -> Préparation de la requête pour le device {device_id}...")
     try:
+        start_time_h = time.time()
         async with session.post(HTTP_URL, data=payload, headers=headers, timeout=HTTP_TIMEOUT) as response:
             response.raise_for_status()
             # response_json = await response.json()  # ERREUR. message='Attempt to decode JSON with unexpected mimetype: text/html; charset=utf-8'
             response_text = await response.text()
             response_json = json.loads(response_text)
+            
+            end_time_h = time.time()
+            print(f"requete HTTP pour {device_id}. début : {start_time_h - global_start_time:.2f}s, fin : {end_time_h - global_start_time:.2f}s, durée :  {end_time_h - start_time_h:.2f}s.")
             
             if response_json.get("value") != 0:
                 # On ne quitte pas ici pour permettre aux autres de finir, l'erreur sera gérée dans la boucle principale.
@@ -233,7 +237,8 @@ def main():
     # 1. Connexion au broker MQTT
     mqtt_client = setup_mqtt_client()
 
-    start_time = time.time()
+    global global_start_time
+    global_start_time = time.time()
     
     try:
         # 2. Publication du message MQTT. Très rapide
@@ -260,7 +265,7 @@ def main():
         print("Déconnexion du client MQTT...")
         mqtt_client.loop_stop()
         mqtt_client.disconnect()
-        print(f"Opération terminée en {end_time - start_time:.2f} secondes.")
+        print(f"Opération terminée en {end_time - global_start_time:.2f} secondes.")
 
 
 if __name__ == "__main__":

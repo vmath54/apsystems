@@ -86,7 +86,6 @@ def on_message(client, userdata, msg):
                     payload.get('msg', '')
                 ]
                 write_csv_row(userdata['file_evt'], row)
-                #write_csv_row(userdata['file_infos'], row)
 
     except (json.JSONDecodeError, KeyError) as e:
         logging.error(f"Erreur lors du traitement du message MQTT: {e}")

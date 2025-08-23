@@ -88,32 +88,36 @@ function regulate() {
   };
 
   const requestParams = {
+    method: "POST",
     url: CONFIG.MODBUS_DAEMON_URL,
+    headers: {"Content-Type": "application/json"},
     body: payload,
-    timeout: 10,
+    timeout: 5,
   };
 
   logDebug("Envoi des données: " + JSON.stringify(payload));
   
-  Shelly.call("HTTP.POST", requestParams, function (response, error_code, error_message) {
-    let nextDelay = CONFIG.DEFAULT_REQUEST_INTERVAL_S;
-    if (error_code !== 0) {
-      logDebug("Erreur HTTP: " + error_code + ": " + error_message);
-      nextDelay = CONFIG.PAUSE_ON_ERROR_S;
-    } else {
-      try {
-        const responseBody = JSON.parse(response.body);
-        logDebug("Réponse reçue: " + JSON.stringify(responseBody));
-        if (responseBody.sensor_read_interval && responseBody.sensor_read_interval > 0) {
-          nextDelay = responseBody.sensor_read_interval;
-        }
-      } catch (e) {
-        logDebug("Erreur parsing JSON: " + e.toString());
+  Shelly.call("http.request", requestParams, 
+    function (response, error_code, error_message) {
+      let nextDelay = CONFIG.DEFAULT_REQUEST_INTERVAL_S;
+      if (error_code !== 0) {
+        logDebug("Erreur HTTP: " + error_code + ": " + error_message);
         nextDelay = CONFIG.PAUSE_ON_ERROR_S;
+      } else {
+        try {
+          const responseBody = JSON.parse(response.body);
+          logDebug("Réponse reçue: " + JSON.stringify(responseBody));
+          if (responseBody.sensor_read_interval && responseBody.sensor_read_interval > 0) {
+            nextDelay = responseBody.sensor_read_interval;
+          }
+        } catch (e) {
+          logDebug("Erreur parsing JSON: " + e.toString());
+          nextDelay = CONFIG.PAUSE_ON_ERROR_S;
+        }
       }
+      rescheduleRequest(nextDelay);
     }
-    rescheduleRequest(nextDelay);
-  });
+  );
 }
 
 function rescheduleRequest(delayS) {

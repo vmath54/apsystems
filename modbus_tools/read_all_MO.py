@@ -17,7 +17,7 @@ syntaxe :
 import argparse
 import re
 from enum import Enum
-from time import sleep
+from datetime import datetime
 
 # --------------------------------------------------------------------------- #
 # import the various client implementations
@@ -47,6 +47,8 @@ INVERTER_STATUS_MAP = [
 ]
 
 def main() -> None:
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
     argparser = argparse.ArgumentParser()
     argparser.add_argument("host", type=str, nargs='?', default = DEFAULT_MODBUS_IP, help=f"Modbus TCP address. default {DEFAULT_MODBUS_IP}")
     argparser.add_argument("-p", "--port", type=int, default = DEFAULT_MODBUS_PORT, help=f"Modbus TCP port. default {DEFAULT_MODBUS_PORT}")
@@ -58,7 +60,7 @@ def main() -> None:
         liste += f"{int(item)}, "
         MOs.append({"modbusid": int(item)})
     liste = re.sub(", $", "", liste)
-    print(f"liste des équipements scannes sur {DEFAULT_MODBUS_IP} : {liste}")
+    print(f"{timestamp}. liste des équipements scannes sur {DEFAULT_MODBUS_IP} : {liste}")
     print()
     
     client: ModbusTcpClient = ModbusTcpClient(

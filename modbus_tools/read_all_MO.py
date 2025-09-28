@@ -57,6 +57,7 @@ def main() -> None:
     argparser.add_argument("-p", "--port", type=int, default = DEFAULT_MODBUS_PORT, help=f"Modbus TCP port. default {DEFAULT_MODBUS_PORT}")
     argparser.add_argument("-u", "--units", type=str, default = DEFAULT_MODBUS_DEVICES, help=f"List Modbus devices address. default {DEFAULT_MODBUS_DEVICES}")
     argparser.add_argument("-r", "--repeat", action="store_true", help="Répète la lecture toutes les 5 minutes à xx:x0:35s et xx:x5:35s.")
+    argparser.add_argument("-nv", "--noverbose", action="store_true", help="sortie avec infos limitées, en format CSV")
     args = argparser.parse_args()
     
     liste = ""
@@ -75,11 +76,17 @@ def main() -> None:
     
     # Exécution immédiate de la fonction
     read_all_MOs(client, MOs, liste, registers)
-    print_result(MOs, liste, registers)
+    
+    if args.noverbose:
+        print("timestamp;modbus_id;serial_number;power;DC1_power;DC2_power;power_max_limit")
+        print_resultcsv(MOs, liste, registers)
+    else:
+        print_result(MOs, liste, registers)
 
     # Si l'option --repeat est présente, on entre dans la boucle de répétition
     if args.repeat:
-        print(f"\nMode répétition activé. Déclenchement périodique à modulo 5ms +{DELTA_SECONDS}s...")
+        if not args.noverbose:
+            print(f"\nMode répétition activé. Déclenchement périodique à modulo 5s +{DELTA_SECONDS}s...")
         try:
             while True:
                 # Calcul du prochain instant d'exécution
@@ -103,10 +110,16 @@ def main() -> None:
 
                 temps_a_attendre = (prochain_instant - now).total_seconds()
                 
-                print(f"Prochaine lecture à {prochain_instant.strftime('%Y-%m-%d %H:%M:%S')}. En attente pendant {temps_a_attendre:.0f} secondes.")
+                if not args.noverbose:
+                    print(f"Prochaine lecture à {prochain_instant.strftime('%Y-%m-%d %H:%M:%S')}. En attente pendant {temps_a_attendre:.0f} secondes.")
                 time.sleep(temps_a_attendre)
                 
                 read_all_MOs(client, MOs, liste, registers)
+                
+                if args.noverbose:
+                    print_resultcsv(MOs, liste, registers)
+                else:
+                    print_result(MOs, liste, registers)
 
         except KeyboardInterrupt:
             print("\nArrêt du script par l'utilisateur.")
@@ -153,10 +166,20 @@ def read_one_MO(client: ModbusTcpClient, one_MO, registers):
         value = client.convert_from_registers(rr.registers, data_type)
         one_MO[k] = value
 
+def print_resultcsv(MOs, liste, registers):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    for one_MO in MOs:
+        id = one_MO.get("modbusid")
+        serial_number = one_MO.get("serialnumber")
+        power_ac = one_MO.get("power_ac") / 10
+        DC1_power = one_MO.get("DC1_power")
+        DC2_power = one_MO.get("DC2_power")
+        power_max_lim = one_MO.get("power_max_lim") / 10
+        print(f"{timestamp};{id};{serial_number};{power_ac:.0f};{DC1_power:.0f};{DC2_power:.0f};{power_max_lim:.0f}")
+
 def print_result(MOs, liste, registers):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print(f"\n{timestamp}. liste des équipements scannes sur {DEFAULT_MODBUS_IP} : {liste}")
-    print()    
 
     totaux = {"power_ac": 0, "energy_total": 0, "DC1_power": 0, "DC2_power": 0}
 
